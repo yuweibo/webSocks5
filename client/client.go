@@ -7,6 +7,7 @@ import (
 	"golang.org/x/net/websocket"
 	"io"
 	"net"
+	"strconv"
 )
 
 type WsRequest1 struct {
@@ -95,13 +96,14 @@ func rwConn(conn net.Conn, config Config) {
 		return
 	}
 	//ipv4
-	var dstAddr []byte
+	var dstAddr string
 	var hostLength byte
 	if atyp == 1 {
-		dstAddr = make([]byte, net.IPv4len)
-		reader.Read(dstAddr)
+		ip := make([]byte, net.IPv4len)
+		reader.Read(ip)
+		dstAddr = strconv.Itoa(int(ip[0])) + "." + strconv.Itoa(int(ip[1])) + "." + strconv.Itoa(int(ip[2])) + "." + strconv.Itoa(int(ip[3]))
 	} else if atyp == 4 {
-		dstAddr = make([]byte, net.IPv6len)
+		dstAddr := make([]byte, net.IPv6len)
 		reader.Read(dstAddr)
 	} else if atyp == 3 {
 		hostLength, err = reader.ReadByte()
@@ -109,8 +111,9 @@ func rwConn(conn net.Conn, config Config) {
 			fmt.Println(err)
 			return
 		}
-		dstAddr = make([]byte, hostLength)
-		reader.Read(dstAddr)
+		hostName := make([]byte, hostLength)
+		reader.Read(hostName)
+		dstAddr = string(hostName)
 	}
 	fmt.Println(string(dstAddr))
 	p1, err := reader.ReadByte()
