@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -80,7 +80,7 @@ func hello(c echo.Context) error {
 	return nil
 }
 
-func main() {
+func Listen() {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())

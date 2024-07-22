@@ -1,6 +1,3 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
@@ -22,12 +19,12 @@ jobs:
         go-version: '1.20'
     - name: kernel version
       run: uname -r
-    - name: Build server.go
-      run: go build server.go
+    - name: Build
+      run: go build
     - name: ls
       run: ls -l
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: server-artifact
-        path: server
+        name: webSocks5-artifact
+        path: webSocks5

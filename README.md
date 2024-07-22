@@ -3,7 +3,7 @@
   - ![image](img/one.png)
 - 服务部署
   - 服务端
-    - 项目打包 go mod download & go build server.go,得到二进制包server
+    - 项目打包 go mod download & go build,得到二进制包webSocks5
     - 阿里云注册账号
     - 函数计算部署
       - 打开链接 https://fcnext.console.aliyun.com/ap-northeast-1/functions
@@ -11,8 +11,8 @@
       - 创建web类型函数
       - 填写参数
         - 函数名称: 随意
-        - 运行时 debian9,通过文件夹上传二进制包(server)
-        - 启动命令 ./server
+        - 运行时 debian9,通过文件夹上传二进制包(webSocks5)
+        - 启动命令 ./webSocks5 -mode=server
         - 监听端口 1323
       - 高级配置
         - cpu 0.05
@@ -25,7 +25,7 @@
           - 配置，触发器获取公网访问地址（不用时关闭，防止被盗用），比如https://one-xxx.ap-northeast-1.fcapp.run
           - 将以上url中的host填写在application.yml中的socks.ws.server上，比如wss://one-xxx.ap-northeast-1.fcapp.run:443/ws
   - 客户端
-    - 启动 com.xiaoyu.kexueone.socks.SocksServer类
+    - 启动 webSocks5 -mode=client
 - 访问
   - firefox
     - 安装扩展 Proxy SwitchyOmega

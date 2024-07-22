@@ -1,4 +1,4 @@
-package main
+package client
 
 import (
 	"bufio"
@@ -22,7 +22,7 @@ type WsResponse1 struct {
 	DstPort       int    `json:"dstPort"`
 }
 
-func main() {
+func Listen() {
 	listener, err := net.Listen("tcp", ":1080")
 	if err != nil {
 		fmt.Println(err)
@@ -133,6 +133,10 @@ func rwConn(conn net.Conn) {
 	err = websocket.JSON.Receive(wsConn, &wsResponse1)
 	if err != nil {
 		fmt.Println(err)
+		return
+	}
+	if wsResponse1.CommandStatus != 0 {
+		fmt.Println("wsResponse1.CommandStatus != 0")
 		return
 	}
 	wl, err := conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
