@@ -22,7 +22,11 @@ type WsResponse1 struct {
 	DstPort       int    `json:"dstPort"`
 }
 
-func Listen() {
+type Config struct {
+	WsServerAddr string `json:"wsServerAddr"`
+}
+
+func Listen(config Config) {
 	listener, err := net.Listen("tcp", ":1080")
 	if err != nil {
 		fmt.Println(err)
@@ -35,11 +39,11 @@ func Listen() {
 			fmt.Println(err)
 			continue
 		}
-		go rwConn(conn)
+		go rwConn(conn, config)
 	}
 }
 
-func rwConn(conn net.Conn) {
+func rwConn(conn net.Conn, config Config) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	version, err := reader.ReadByte()
@@ -114,8 +118,7 @@ func rwConn(conn net.Conn) {
 	dstPort := int(p1)<<8 + int(p2)
 	fmt.Println(dstPort)
 
-	wsAddress := "ws://localhost:1323/ws"
-	wsConn, err := websocket.Dial(wsAddress, "", "http://localhost:1323")
+	wsConn, err := websocket.Dial(config.WsServerAddr, "", "http://localhost:1323")
 	if err != nil {
 		fmt.Println(err)
 		return
