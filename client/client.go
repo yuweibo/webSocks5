@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
 
 type WsRequest1 struct {
@@ -88,8 +89,7 @@ func rwConn(conn net.Conn, config Config) {
 		return
 	}
 	//rsv
-	rsv, _ := reader.ReadByte()
-	fmt.Println(rsv)
+	_, _ = reader.ReadByte()
 	atyp, err := reader.ReadByte()
 	if err != nil {
 		fmt.Println(err)
@@ -99,12 +99,13 @@ func rwConn(conn net.Conn, config Config) {
 	var dstAddr string
 	var hostLength byte
 	if atyp == 1 {
-		ip := make([]byte, net.IPv4len)
-		reader.Read(ip)
-		dstAddr = strconv.Itoa(int(ip[0])) + "." + strconv.Itoa(int(ip[1])) + "." + strconv.Itoa(int(ip[2])) + "." + strconv.Itoa(int(ip[3]))
+		ipv4 := make([]byte, net.IPv4len)
+		reader.Read(ipv4)
+		dstAddr = byteSliceToIP(ipv4)
 	} else if atyp == 4 {
-		dstAddr := make([]byte, net.IPv6len)
-		reader.Read(dstAddr)
+		ipv6 := make([]byte, net.IPv6len)
+		reader.Read(ipv6)
+		dstAddr = byteSliceToIP(ipv6)
 	} else if atyp == 3 {
 		hostLength, err = reader.ReadByte()
 		if err != nil {
@@ -115,12 +116,18 @@ func rwConn(conn net.Conn, config Config) {
 		reader.Read(hostName)
 		dstAddr = string(hostName)
 	}
-	fmt.Println(string(dstAddr))
 	p1, err := reader.ReadByte()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	p2, err := reader.ReadByte()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	dstPort := int(p1)<<8 + int(p2)
-	fmt.Println(dstPort)
-
+	fmt.Println("dstAddr:", dstAddr, "dstPort:", dstPort)
 	wsConn, err := websocket.Dial(config.WsServerAddr, "", "http://localhost:1323")
 	if err != nil {
 		fmt.Println(err)
@@ -180,4 +187,12 @@ func rwConn(conn net.Conn, config Config) {
 
 	fmt.Println("socks connection closed")
 
+}
+
+func byteSliceToIP(ip []byte) string {
+	ipStrs := make([]string, len(ip))
+	for i, part := range ip {
+		ipStrs[i] = strconv.Itoa(int(part))
+	}
+	return strings.Join(ipStrs, ".")
 }
