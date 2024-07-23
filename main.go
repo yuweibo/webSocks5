@@ -9,16 +9,20 @@ import (
 
 var mode string
 var wsServer string
+var clientSocks5Port int
+var clientJwtPrivateKeyFilePath string
 
 func main() {
-	flag.StringVar(&mode, "mode", "server", "mode server or client")
-	flag.StringVar(&wsServer, "wsServer", "ws://localhost:1323/ws", "websocket Server")
+	flag.StringVar(&mode, "m", "s", "mode s(server) or c(client)")
+	flag.StringVar(&wsServer, "ws", "ws://localhost:1323/ws", "websocket Server")
+	flag.IntVar(&clientSocks5Port, "csp", 1080, "client Socks5 Port")
+	flag.StringVar(&clientJwtPrivateKeyFilePath, "cjp", "", "client Jwt PrivateKey File Path")
 	flag.Parse()
 
-	if mode == "server" {
+	if mode == "s" {
 		server.Listen()
-	} else if mode == "client" {
-		client.Listen(client.Config{WsServerAddr: wsServer})
+	} else if mode == "c" {
+		client.Listen(client.Config{WsServerAddr: wsServer, Socks5Port: clientSocks5Port, JwtPrivateKeyFilePath: clientJwtPrivateKeyFilePath})
 	} else {
 		fmt.Println("不支持该运行模式")
 	}

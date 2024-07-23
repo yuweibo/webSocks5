@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/net/websocket"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type WsRequest1 struct {
@@ -25,11 +28,13 @@ type WsResponse1 struct {
 }
 
 type Config struct {
-	WsServerAddr string `json:"wsServerAddr"`
+	WsServerAddr          string
+	Socks5Port            int
+	JwtPrivateKeyFilePath string
 }
 
 func Listen(config Config) {
-	listener, err := net.Listen("tcp", ":1080")
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(config.Socks5Port))
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -54,6 +59,7 @@ func rwConn(conn net.Conn, config Config) {
 		return
 	}
 	//只支持socks5
+
 	if version != 5 {
 		fmt.Println("not support socks5 version")
 		return
@@ -128,6 +134,16 @@ func rwConn(conn net.Conn, config Config) {
 	}
 	dstPort := int(p1)<<8 + int(p2)
 	fmt.Println("dstAddr:", dstAddr, "dstPort:", dstPort)
+
+	if config.JwtPrivateKeyFilePath != "" {
+		token, err := genJwtToken(config.JwtPrivateKeyFilePath)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		config.WsServerAddr += ("?token=" + token)
+	}
+
 	wsConn, err := websocket.Dial(config.WsServerAddr, "", "http://localhost:1323")
 	if err != nil {
 		fmt.Println(err)
@@ -195,4 +211,29 @@ func byteSliceToIP(ip []byte) string {
 		ipStrs[i] = strconv.Itoa(int(part))
 	}
 	return strings.Join(ipStrs, ".")
+}
+
+func genJwtToken(privateKeyFilePath string) (string, error) {
+	// 私钥
+	privateKey, err := os.ReadFile(privateKeyFilePath)
+	if err != nil {
+		return "", err
+	}
+	// 设置JWT的claims
+	claims := jwt.MapClaims{}
+	claims["name"] = "clientGo"
+	claims["exp"] = time.Now().Add(time.Hour * 24).Unix() // token过期时间
+
+	// 使用RS256算法生成token
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	privateKeyData, err := jwt.ParseRSAPrivateKeyFromPEM(privateKey)
+	if err != nil {
+		return "", err
+	}
+	// 签名token
+	signedToken, err := token.SignedString(privateKeyData)
+	if err != nil {
+		return "", err
+	}
+	return signedToken, nil
 }
