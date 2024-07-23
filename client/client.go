@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/patrickmn/go-cache"
 	"golang.org/x/net/websocket"
 	"io"
 	"net"
@@ -213,7 +214,15 @@ func byteSliceToIP(ip []byte) string {
 	return strings.Join(ipStrs, ".")
 }
 
+var jwtCache = cache.New(10*time.Hour, 10*time.Minute)
+
 func genJwtToken(privateKeyFilePath string) (string, error) {
+
+	ctoken, found := jwtCache.Get(privateKeyFilePath)
+	if found {
+		return ctoken.(string), nil
+	}
+
 	// 私钥
 	privateKey, err := os.ReadFile(privateKeyFilePath)
 	if err != nil {
@@ -235,5 +244,6 @@ func genJwtToken(privateKeyFilePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	jwtCache.SetDefault(privateKeyFilePath, signedToken)
 	return signedToken, nil
 }
