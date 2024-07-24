@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"time"
 )
 
 const (
@@ -44,7 +45,7 @@ func hello(c echo.Context) error {
 			return
 		}
 		c.Logger().Info(wsRequest)
-		clientConn, err := net.Dial("tcp", wsRequest.Address())
+		clientConn, err := net.DialTimeout("tcp", wsRequest.Address(), 5*time.Second)
 		if err != nil {
 			c.Logger().Error(err)
 			websocket.JSON.Send(ws, WsResponse{FAILURE, wsRequest.DstAddrType, wsRequest.DstAddr, wsRequest.DstPort})
