@@ -30,22 +30,18 @@ type Config struct {
 */
 var connections = 0
 var connMu sync.Mutex
+var wsClientInitMu sync.Mutex
 
 func Listen(config Config) {
 	log.SetLevel(log.INFO)
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(config.Socks5Port))
+	wsAddr, err := wsAddr(config)
 	if err != nil {
 		log.Error(err)
 		return
 	}
-
 	//初始化webSocket客户端连接池
 	wsCount := 10
-	err = initWsClientCache(wsCount, config)
-	if err != nil {
-		log.Error(err)
-		return
-	}
+	go initWsClientCache(wsCount, wsAddr)
 	//打印连接数
 	go func() {
 		for {
@@ -55,6 +51,11 @@ func Listen(config Config) {
 			time.Sleep(10 * time.Second)
 		}
 	}()
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(config.Socks5Port))
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	defer listener.Close()
 	socksIdSeq := 1
 	socksIdPrefix := rand.Intn(10000)
@@ -65,7 +66,7 @@ func Listen(config Config) {
 			continue
 		}
 		socksIdSeq += 1
-		wsCon := randWsConn(0)
+		wsCon := randWsConn(0, wsCount, wsAddr)
 		if wsCon == nil {
 			log.Error("wsCon null")
 			conn.Close()
@@ -75,15 +76,33 @@ func Listen(config Config) {
 	}
 }
 
-func randWsConn(tryCount int) *websocket.Conn {
+func wsAddr(config Config) (string, error) {
+	wsAddr := config.WsServerAddr
+	if config.JwtPrivateKeyFilePath != "" {
+		token, err := genJwtToken(config.JwtPrivateKeyFilePath)
+		if err != nil {
+			return "", err
+		}
+		wsAddr = config.WsServerAddr + ("?token=" + token)
+	}
+	return wsAddr, nil
+}
+
+func randWsConn(tryCount int, wsCount int, wsAddr string) *websocket.Conn {
 	if tryCount >= 10 {
 		return nil
 	}
-	key := strconv.Itoa(rand.Intn(wsClientCache.ItemCount()))
+	wsClientSize := wsClientCache.ItemCount()
+	if wsClientSize == 0 {
+		initWsClientCache(wsCount, wsAddr)
+		wsClientSize = wsClientCache.ItemCount()
+	} else if wsClientSize < wsCount {
+		go initWsClientCache(wsCount, wsAddr)
+	}
+	key := strconv.Itoa(rand.Intn(wsClientSize))
 	ws, found := wsClientCache.Get(key)
 	if !found {
-		log.Warn("wsClientCache.Get not found,key:" + key)
-		return randWsConn(tryCount + 1)
+		return randWsConn(tryCount+1, wsCount, wsAddr)
 	}
 	return ws.(*websocket.Conn)
 }
@@ -91,43 +110,43 @@ func randWsConn(tryCount int) *websocket.Conn {
 var wsClientCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 
-func initWsClientCache(wsCount int, config Config) error {
-	if config.JwtPrivateKeyFilePath != "" {
-		token, err := genJwtToken(config.JwtPrivateKeyFilePath)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		config.WsServerAddr += ("?token=" + token)
-	}
+func initWsClientCache(wsCount int, wsAddr string) {
+	wsClientInitMu.Lock()
+	defer wsClientInitMu.Unlock()
 	for i := 0; i < wsCount; i++ {
-		err := newWsConn(strconv.Itoa(i), config.WsServerAddr)
-		if err != nil {
-			return err
-		}
+		newWsConn(strconv.Itoa(i), wsAddr)
 	}
-	return nil
 }
 
-func newWsConn(key string, wsAddr string) error {
+func newWsConn(key string, wsAddr string) {
+	_, found := wsClientCache.Get(key)
+	if found {
+		return
+	}
 	wsConn, err := websocket.Dial(wsAddr, "", "http://localhost:1323")
 	if err != nil {
 		log.Error(err)
-		return err
+		return
 	}
 	wsClientCache.SetDefault(key, wsConn)
 
 	go func(key string, wsConn *websocket.Conn) {
-		defer func() {
-			log.Warn("webSocket closed")
-			//remove from cache
-			wsClientCache.Delete(key)
-			//ws conn close
-			wsConn.Close()
-			//open new ws Conn
-			newWsConn(key, wsAddr)
+		defer closeWsConn(key, wsConn)
+		read := false
+		// 定时器每5s检查有没有数据读写，没有数据读写就关闭连接
+		go func() {
+			defer closeWsConn(key, wsConn)
+			for {
+				time.Sleep(60 * time.Second)
+				if read {
+					read = false
+				} else {
+					return
+				}
+			}
 		}()
 		for {
+			read = true
 			var wsResponse protocol.WsProtocol
 			err = websocket.JSON.Receive(wsConn, &wsResponse)
 			if err != nil {
@@ -163,7 +182,14 @@ func newWsConn(key string, wsAddr string) error {
 			}
 		}
 	}(key, wsConn)
-	return nil
+}
+
+func closeWsConn(key string, wsConn *websocket.Conn) {
+	log.Warn("webSocket closed")
+	//remove from cache
+	wsClientCache.Delete(key)
+	//ws conn close
+	wsConn.Close()
 }
 
 func rwConn(wsCon *websocket.Conn, conn net.Conn, socksId string) {
@@ -280,8 +306,8 @@ func rwConn(wsCon *websocket.Conn, conn net.Conn, socksId string) {
 // 操作连接数
 func connOp(con int) {
 	connMu.Lock()
+	defer connMu.Unlock()
 	connections += con
-	connMu.Unlock()
 }
 
 var jwtCache = cache.New(10*time.Hour, 10*time.Minute)
