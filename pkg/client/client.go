@@ -66,7 +66,7 @@ func Listen(config Config) {
 			continue
 		}
 		socksIdSeq += 1
-		wsCon := randWsConn(0, wsCount, wsAddr)
+		wsCon := randWsConn(0, wsCount, wsAddr, socksIdSeq)
 		if wsCon == nil {
 			log.Error("wsCon null")
 			conn.Close()
@@ -88,7 +88,7 @@ func wsAddr(config Config) (string, error) {
 	return wsAddr, nil
 }
 
-func randWsConn(tryCount int, wsCount int, wsAddr string) *websocket.Conn {
+func randWsConn(tryCount int, wsCount int, wsAddr string, socksIdSeq int) *websocket.Conn {
 	if tryCount >= 10 {
 		return nil
 	}
@@ -99,10 +99,17 @@ func randWsConn(tryCount int, wsCount int, wsAddr string) *websocket.Conn {
 	} else if wsClientSize < wsCount {
 		go initWsClientCache(wsCount, wsAddr)
 	}
-	key := strconv.Itoa(rand.Intn(wsClientSize))
+	keyIndex := 0
+	//前5次轮训查找，找不到后面随机
+	if tryCount < 5 {
+		keyIndex = socksIdSeq % wsCount
+	} else {
+		keyIndex = rand.Intn(wsClientSize)
+	}
+	key := strconv.Itoa(keyIndex)
 	ws, found := wsClientCache.Get(key)
 	if !found {
-		return randWsConn(tryCount+1, wsCount, wsAddr)
+		return randWsConn(tryCount+1, wsCount, wsAddr, socksIdSeq)
 	}
 	return ws.(*websocket.Conn)
 }
