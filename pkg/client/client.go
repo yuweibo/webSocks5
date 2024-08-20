@@ -14,24 +14,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"webSocks5/server"
+	"webSocks5/pkg/protocol"
 )
-
-type WsRequest1 struct {
-	SocksId     string `json:"socksId"`
-	WsType      int    `json:"wsType"`
-	DstAddrType int    `json:"dstAddrType"`
-	DstAddr     string `json:"dstAddr"`
-	DstPort     int    `json:"dstPort"`
-	Data        []byte `json:"data"`
-}
-
-type WsResponse1 struct {
-	SocksId       string `json:"socksId"`
-	WsType        int    `json:"wsType"`
-	CommandStatus int    `json:"commandStatus"`
-	Data          []byte `json:"data"`
-}
 
 type Config struct {
 	WsServerAddr          string
@@ -144,24 +128,24 @@ func newWsConn(key string, wsAddr string) error {
 			newWsConn(key, wsAddr)
 		}()
 		for {
-			var wsResponse1 WsResponse1
-			err = websocket.JSON.Receive(wsConn, &wsResponse1)
+			var wsResponse protocol.WsProtocol
+			err = websocket.JSON.Receive(wsConn, &wsResponse)
 			if err != nil {
 				log.Error(err)
 				//todo 关闭所有关联的socks客户端
 				return
 			}
-			socksConnValue, found := socksConnCache.Get(wsResponse1.SocksId)
+			socksConnValue, found := socksConnCache.Get(wsResponse.SocksId)
 			if !found {
-				log.Error("SocksId:" + wsResponse1.SocksId + " not found")
+				log.Debug("SocksId:" + wsResponse.SocksId + " not found")
 				continue
 			}
 			socksConn := socksConnValue.(net.Conn)
-			if server.OPEN == wsResponse1.WsType {
-				if wsResponse1.CommandStatus != server.SUCCESS {
-					log.Error("wsResponse1.CommandStatus != 0")
+			if protocol.OPEN == wsResponse.Op {
+				if wsResponse.OpStatus != protocol.SUCCESS {
+					log.Debug("wsResponse.OpStatus failed")
 					socksConn.Close()
-					socksConnCache.Delete(wsResponse1.SocksId)
+					socksConnCache.Delete(wsResponse.SocksId)
 					continue
 				}
 				wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
@@ -169,34 +153,17 @@ func newWsConn(key string, wsAddr string) error {
 					log.Error(err)
 				}
 				log.Debug(wl)
-			} else if server.DATA == wsResponse1.WsType {
-				socksConn.Write(wsResponse1.Data)
-			} else if server.CLOSE == wsResponse1.WsType {
+			} else if protocol.DATA == wsResponse.Op {
+				socksConn.Write(wsResponse.Data)
+			} else if protocol.CLOSE == wsResponse.Op {
 				socksConn.Close()
-				socksConnCache.Delete(wsResponse1.SocksId)
+				socksConnCache.Delete(wsResponse.SocksId)
 			} else {
-				log.Error("WsType not define:" + strconv.Itoa(wsResponse1.WsType))
+				log.Error("Op not define:" + strconv.Itoa(wsResponse.Op))
 			}
 		}
 	}(key, wsConn)
 	return nil
-}
-
-// WsWriteWrapper 自定义 Write
-type WsWriteWrapper struct {
-	conn    *websocket.Conn
-	socksId string
-}
-
-func (writer WsWriteWrapper) Write(p []byte) (n int, err error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-	e := websocket.JSON.Send(writer.conn, WsRequest1{writer.socksId, server.DATA, 0, "", 0, p})
-	if e != nil {
-		return 0, e
-	}
-	return len(p), nil
 }
 
 func rwConn(wsCon *websocket.Conn, conn net.Conn, socksId string) {
@@ -204,7 +171,7 @@ func rwConn(wsCon *websocket.Conn, conn net.Conn, socksId string) {
 	connOp(1)
 	defer func() {
 		//remove from cache
-		websocket.JSON.Send(wsCon, WsRequest1{socksId, server.CLOSE, 0, "", 0, nil})
+		websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
 		socksConnCache.Delete(socksId)
 		conn.Close()
 
@@ -292,7 +259,7 @@ func rwConn(wsCon *websocket.Conn, conn net.Conn, socksId string) {
 	dstPort := int(p1)<<8 + int(p2)
 	log.Debug("dstAddr:", dstAddr, "dstPort:", dstPort)
 
-	err = websocket.JSON.Send(wsCon, WsRequest1{socksId, server.OPEN, int(atyp), string(dstAddr), dstPort, nil})
+	err = websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, DstAddrType: int(atyp), TargetAddr: dstAddr, TargetPort: dstPort})
 	if err != nil {
 		log.Error(err)
 		return
@@ -300,7 +267,7 @@ func rwConn(wsCon *websocket.Conn, conn net.Conn, socksId string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		io.Copy(WsWriteWrapper{wsCon, socksId}, reader)
+		io.Copy(protocol.WsWriteWrapper{WsConn: wsCon, SocksId: socksId}, reader)
 		cancel()
 	}()
 

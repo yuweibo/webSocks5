@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"webSocks5/client"
-	"webSocks5/server"
+	"webSocks5/pkg/client"
+	"webSocks5/pkg/server"
 )
 
 var mode string
