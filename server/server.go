@@ -62,6 +62,7 @@ func (writer WsWriteWrapper) Write(p []byte) (n int, err error) {
 func hello(c echo.Context) error {
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer func() {
+			c.Logger().Info("wsClosed")
 			ws.Close()
 		}()
 		for {
@@ -70,7 +71,7 @@ func hello(c echo.Context) error {
 			err := websocket.JSON.Receive(ws, &wsRequest)
 			if err != nil {
 				c.Logger().Error(err)
-				continue
+				return
 			}
 			c.Logger().Info(wsRequest)
 			socksId := wsRequest.SocksId
@@ -88,46 +89,39 @@ func hello(c echo.Context) error {
 						clientConn.Close()
 					}
 					socksConnCache.SetDefault(socksId, clientConn)
-					go func() {
-						defer func() {
-							socksConnCache.Delete(socksId)
-							clientConn.Close()
-							websocket.JSON.Send(ws, WsResponse{socksId, CLOSE, SUCCESS, nil})
-						}()
-						_, err := io.Copy(WsWriteWrapper{ws, socksId}, clientConn)
-						if err != nil {
-							log.Error(err)
-							//connection close
-						}
+					defer func() {
+						socksConnCache.Delete(socksId)
+						clientConn.Close()
+						websocket.JSON.Send(ws, WsResponse{socksId, CLOSE, SUCCESS, nil})
 					}()
+					_, err = io.Copy(WsWriteWrapper{ws, socksId}, clientConn)
+					if err != nil {
+						log.Error(err)
+						//connection close
+					}
 				}()
 			} else if DATA == wsRequest.WsType {
-				go func() {
-					conn, found := socksConnCache.Get(socksId)
-					if !found {
-						log.Error("SocksId not found in cache")
-						return
-					}
-					c := conn.(net.Conn)
-					c.Write(wsRequest.Data)
-				}()
+				conn, found := socksConnCache.Get(socksId)
+				if !found {
+					log.Error("SocksId not found in cache")
+					continue
+				}
+				c := conn.(net.Conn)
+				c.Write(wsRequest.Data)
 			} else if CLOSE == wsRequest.WsType {
-				go func() {
-					conn, found := socksConnCache.Get(socksId)
-					if !found {
-						log.Warn("socksId not found in cache,maybe closed")
-						return
-					}
-					socksConnCache.Delete(socksId)
-					c := conn.(net.Conn)
-					c.Close()
-				}()
+				conn, found := socksConnCache.Get(socksId)
+				if !found {
+					log.Warn("socksId not found in cache,maybe closed")
+					continue
+				}
+				socksConnCache.Delete(socksId)
+				c := conn.(net.Conn)
+				c.Close()
 			} else {
 				log.Error("WsType not defined" + strconv.Itoa(wsRequest.WsType))
 				continue
 			}
 		}
-		c.Logger().Info("wsClosed")
 		return
 	}).ServeHTTP(c.Response(), c.Request())
 	return nil

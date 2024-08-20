@@ -81,15 +81,27 @@ func Listen(config Config) {
 			continue
 		}
 		socksIdSeq += 1
-		ws, found := wsClientCache.Get(strconv.Itoa(rand.Intn(wsCount)))
-		if !found {
-			log.Error("wsClientCache.Get not found")
+		wsCon := randWsConn(0)
+		if wsCon == nil {
+			log.Error("wsCon null")
 			conn.Close()
 			continue
 		}
-		wsCon := ws.(*websocket.Conn)
 		go rwConn(wsCon, conn, strconv.Itoa(socksIdPrefix)+":"+strconv.Itoa(socksIdSeq))
 	}
+}
+
+func randWsConn(tryCount int) *websocket.Conn {
+	if tryCount >= 10 {
+		return nil
+	}
+	key := strconv.Itoa(rand.Intn(wsClientCache.ItemCount()))
+	ws, found := wsClientCache.Get(key)
+	if !found {
+		log.Warn("wsClientCache.Get not found,key:" + key)
+		return randWsConn(tryCount + 1)
+	}
+	return ws.(*websocket.Conn)
 }
 
 var wsClientCache = cache.New(cache.NoExpiration, cache.NoExpiration)
@@ -105,59 +117,68 @@ func initWsClientCache(wsCount int, config Config) error {
 		config.WsServerAddr += ("?token=" + token)
 	}
 	for i := 0; i < wsCount; i++ {
-		wsConn, err := websocket.Dial(config.WsServerAddr, "", "http://localhost:1323")
+		err := newWsConn(strconv.Itoa(i), config.WsServerAddr)
 		if err != nil {
-			log.Error(err)
 			return err
 		}
-		key := strconv.Itoa(i)
-		wsClientCache.SetDefault(key, wsConn)
+	}
+	return nil
+}
 
-		go func(key string, wsConn *websocket.Conn) {
-			defer func() {
-				log.Warn("webSocket closed")
-				//remove from cache
-				wsClientCache.Delete(key)
-				//ws conn close
-				wsConn.Close()
-			}()
-			for {
-				var wsResponse1 WsResponse1
-				err = websocket.JSON.Receive(wsConn, &wsResponse1)
-				if err != nil {
-					log.Error(err)
-					//todo 关闭所有关联的socks客户端
-					return
-				}
-				socksConnValue, found := socksConnCache.Get(wsResponse1.SocksId)
-				if !found {
-					log.Error("SocksId:" + wsResponse1.SocksId + " not found")
-					continue
-				}
-				socksConn := socksConnValue.(net.Conn)
-				if server.OPEN == wsResponse1.WsType {
-					if wsResponse1.CommandStatus != server.SUCCESS {
-						log.Error("wsResponse1.CommandStatus != 0")
-						socksConn.Close()
-						socksConnCache.Delete(wsResponse1.SocksId)
-						continue
-					}
-					wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-					if err != nil {
-						log.Error(err)
-					}
-					log.Debug(wl)
-				} else if server.DATA == wsResponse1.WsType {
-					socksConn.Write(wsResponse1.Data)
-				} else if server.CLOSE == wsResponse1.WsType {
+func newWsConn(key string, wsAddr string) error {
+	wsConn, err := websocket.Dial(wsAddr, "", "http://localhost:1323")
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	wsClientCache.SetDefault(key, wsConn)
+
+	go func(key string, wsConn *websocket.Conn) {
+		defer func() {
+			log.Warn("webSocket closed")
+			//remove from cache
+			wsClientCache.Delete(key)
+			//ws conn close
+			wsConn.Close()
+			//open new ws Conn
+			newWsConn(key, wsAddr)
+		}()
+		for {
+			var wsResponse1 WsResponse1
+			err = websocket.JSON.Receive(wsConn, &wsResponse1)
+			if err != nil {
+				log.Error(err)
+				//todo 关闭所有关联的socks客户端
+				return
+			}
+			socksConnValue, found := socksConnCache.Get(wsResponse1.SocksId)
+			if !found {
+				log.Error("SocksId:" + wsResponse1.SocksId + " not found")
+				continue
+			}
+			socksConn := socksConnValue.(net.Conn)
+			if server.OPEN == wsResponse1.WsType {
+				if wsResponse1.CommandStatus != server.SUCCESS {
+					log.Error("wsResponse1.CommandStatus != 0")
 					socksConn.Close()
 					socksConnCache.Delete(wsResponse1.SocksId)
-				} else {
-					log.Error("WsType not define:" + strconv.Itoa(wsResponse1.WsType))
+					continue
 				}
+				wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+				if err != nil {
+					log.Error(err)
+				}
+				log.Debug(wl)
+			} else if server.DATA == wsResponse1.WsType {
+				socksConn.Write(wsResponse1.Data)
+			} else if server.CLOSE == wsResponse1.WsType {
+				socksConn.Close()
+				socksConnCache.Delete(wsResponse1.SocksId)
+			} else {
+				log.Error("WsType not define:" + strconv.Itoa(wsResponse1.WsType))
 			}
-		}(key, wsConn)
-	}
+		}
+	}(key, wsConn)
 	return nil
 }
 
