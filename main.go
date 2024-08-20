@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"webSocks5/client"
-	"webSocks5/server"
+	"webSocks5/pkg/client"
+	"webSocks5/pkg/server"
 )
 
 var mode string
@@ -14,7 +14,7 @@ var clientJwtPrivateKeyFilePath string
 
 func main() {
 	flag.StringVar(&mode, "m", "s", "mode s(server) or c(client)")
-	flag.StringVar(&wsServer, "ws", "ws://localhost:1323/ws", "websocket Server")
+	flag.StringVar(&wsServer, "ws", "ws://localhost:8080/ws", "websocket Server")
 	flag.IntVar(&clientSocks5Port, "csp", 1080, "client Socks5 Port")
 	flag.StringVar(&clientJwtPrivateKeyFilePath, "cjp", "", "client Jwt PrivateKey File Path")
 	flag.Parse()
