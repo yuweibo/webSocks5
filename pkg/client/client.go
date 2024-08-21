@@ -57,7 +57,8 @@ func Listen(config Config) {
 		return
 	}
 	defer listener.Close()
-	socksIdSeq := 1
+	//初始化值和wsCount保持一致，避免使用轮询策略时所有请求落在第一个ws连接上
+	socksIdSeq := wsCount
 	socksIdPrefix := rand.Intn(10000)
 	for {
 		conn, err := listener.Accept()
@@ -94,7 +95,8 @@ func randWsConn(tryCount int, wsCount int, wsAddr string, socksIdSeq int) *webso
 	}
 	wsClientSize := wsClientCache.ItemCount()
 	if wsClientSize == 0 {
-		initWsClientCache(wsCount, wsAddr)
+		//先初始化一个请求，避免一开始太慢
+		initWsClientCache(1, wsAddr)
 		wsClientSize = wsClientCache.ItemCount()
 	} else if wsClientSize < wsCount {
 		go initWsClientCache(wsCount, wsAddr)
