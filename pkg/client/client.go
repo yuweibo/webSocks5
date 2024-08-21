@@ -96,7 +96,7 @@ func randWsConn(tryCount int, wsCount int, wsAddr string, socksIdSeq int) *webso
 	wsClientSize := wsClientCache.ItemCount()
 	if wsClientSize == 0 {
 		//先初始化一个请求，避免一开始太慢
-		initWsClientCache(1, wsAddr)
+		initWsClientCache(2, wsAddr)
 		wsClientSize = wsClientCache.ItemCount()
 	} else if wsClientSize < wsCount {
 		go initWsClientCache(wsCount, wsAddr)
@@ -104,7 +104,7 @@ func randWsConn(tryCount int, wsCount int, wsAddr string, socksIdSeq int) *webso
 	keyIndex := 0
 	//前5次轮训查找，找不到后面随机
 	if tryCount < 5 {
-		keyIndex = socksIdSeq % wsCount
+		keyIndex = socksIdSeq % wsClientSize
 	} else {
 		keyIndex = rand.Intn(wsClientSize)
 	}
