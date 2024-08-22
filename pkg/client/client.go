@@ -207,9 +207,8 @@ func newWsConn(key string, wsAddr string) {
 					log.Debug(wl)
 				}()
 			} else if protocol.DATA == wsResponse.Op {
-				go func() {
-					socksConn.Write(wsResponse.Data)
-				}()
+				socksConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				socksConn.Write(wsResponse.Data)
 			} else if protocol.CLOSE == wsResponse.Op {
 				closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
 			} else {

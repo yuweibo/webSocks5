@@ -53,15 +53,14 @@ func hello(c echo.Context) error {
 					io.Copy(protocol.WsWriteWrapper{ws, socksId}, clientConn)
 				}()
 			} else if protocol.DATA == wsRequest.Op {
-				go func() {
-					conn, found := socksConnCache.Get(socksId)
-					if !found {
-						log.Warn("SocksId not found in cache")
-						return
-					}
-					c := conn.(net.Conn)
-					c.Write(wsRequest.Data)
-				}()
+				conn, found := socksConnCache.Get(socksId)
+				if !found {
+					log.Warn("SocksId not found in cache")
+					continue
+				}
+				c := conn.(net.Conn)
+				c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				c.Write(wsRequest.Data)
 			} else if protocol.CLOSE == wsRequest.Op {
 				conn, found := socksConnCache.Get(socksId)
 				if !found {
