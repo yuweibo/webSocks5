@@ -26,6 +26,11 @@ type Config struct {
 var wsClientInitMu sync.Mutex
 var chooseMu sync.Mutex
 
+// webSocket客户端连接数
+var initWsCount = 10
+var maxWsCount = 200
+var thresholdWsCount = 3
+
 func Listen(config Config) {
 	log.SetLevel(log.INFO)
 	wsAddr, err := wsAddr(config)
@@ -33,8 +38,6 @@ func Listen(config Config) {
 		log.Error(err)
 		return
 	}
-	//webSocket客户端连接数
-	wsCount := 10
 	//打印连接数
 	go func() {
 		for {
@@ -54,8 +57,7 @@ func Listen(config Config) {
 		return
 	}
 	defer listener.Close()
-	//初始化值和wsCount保持一致，避免使用轮询策略时所有请求落在第一个ws连接上
-	socksIdSeq := wsCount
+	socksIdSeq := 0
 	socksIdPrefix := rand.Intn(10000)
 	for {
 		conn, err := listener.Accept()
@@ -64,7 +66,7 @@ func Listen(config Config) {
 			continue
 		}
 		socksIdSeq += 1
-		wsCon, wsKey := chooseWsConn(0, wsCount, wsAddr, socksIdSeq)
+		wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq)
 		if wsCon == nil {
 			log.Error("wsCon null")
 			conn.Close()
@@ -99,44 +101,57 @@ func wsAddr(config Config) (string, error) {
 	return wsAddr, nil
 }
 
-func chooseWsConn(tryCount int, wsCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
+func chooseWsConn(tryCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
 	chooseMu.Lock()
 	defer chooseMu.Unlock()
-	return findWsConn(tryCount, wsCount, wsAddr, socksIdSeq)
+	return findWsConn(tryCount, wsAddr, socksIdSeq)
 }
 
-func findWsConn(tryCount int, wsCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
+func findWsConn(tryCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
 	if tryCount >= 10 {
 		return nil, ""
 	}
 	wsClientSize := wsClientCache.ItemCount()
 	if wsClientSize == 0 {
-		//先初始化一半请求，避免一开始太慢
-		initWsClientCache(wsCount/2, wsAddr)
-		wsClientSize = wsClientCache.ItemCount()
-	} else if wsClientSize < wsCount {
-		go initWsClientCache(wsCount, wsAddr)
+		//同步初始化ws连接
+		initWsClientCache(initWsCount, wsAddr)
 	}
+	//异步动态扩容ws连接
+	go prepareWsClient(wsAddr)
 	keyIndex := 0
-	//前5次最少连接数查找，找不到后面随机
-	if tryCount < 5 {
-		sockSConn := 10000
-		for wsKey := range wsClientCache.Items() {
-			cacheCount := getWsKeySocksConn()[wsKey]
-			if cacheCount < sockSConn {
-				keyIndex, _ = strconv.Atoi(wsKey)
-				sockSConn = cacheCount
-			}
+	//最少连接数查找
+	sockSConn := 1000000
+	for wsKey := range wsClientCache.Items() {
+		cacheCount := getWsKeySocksConn()[wsKey]
+		if cacheCount < sockSConn {
+			keyIndex, _ = strconv.Atoi(wsKey)
+			sockSConn = cacheCount
 		}
-	} else {
-		keyIndex = rand.Intn(wsClientSize)
+	}
+	if sockSConn >= thresholdWsCount {
+		keyIndex = -1
+		prepareWsClient(wsAddr)
 	}
 	key := strconv.Itoa(keyIndex)
 	ws, found := wsClientCache.Get(key)
 	if !found {
-		return findWsConn(tryCount+1, wsCount, wsAddr, socksIdSeq)
+		return findWsConn(tryCount+1, wsAddr, socksIdSeq)
 	}
 	return ws.(*websocket.Conn), key
+}
+
+func prepareWsClient(wsAddr string) {
+	wsClientSize := wsClientCache.ItemCount()
+	if wsClientSize != 0 {
+		wsClientAvg := socksConnCache.ItemCount() / wsClientSize
+		if wsClientAvg >= thresholdWsCount {
+			prepareWsSize := (socksConnCache.ItemCount() / thresholdWsCount) + 1
+			if prepareWsSize > maxWsCount {
+				prepareWsSize = maxWsCount
+			}
+			initWsClientCache(prepareWsSize, wsAddr)
+		}
+	}
 }
 
 var wsClientCache = cache.New(cache.NoExpiration, cache.NoExpiration)
@@ -144,14 +159,14 @@ var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var socksWsKeyCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 func initWsClientCache(wsCount int, wsAddr string) {
-	wsClientInitMu.Lock()
-	defer wsClientInitMu.Unlock()
 	for i := 0; i < wsCount; i++ {
 		newWsConn(strconv.Itoa(i), wsAddr)
 	}
 }
 
 func newWsConn(key string, wsAddr string) {
+	wsClientInitMu.Lock()
+	defer wsClientInitMu.Unlock()
 	_, found := wsClientCache.Get(key)
 	if found {
 		return
