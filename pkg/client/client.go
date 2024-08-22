@@ -194,18 +194,22 @@ func newWsConn(key string, wsAddr string) {
 			}
 			socksConn := socksConnValue.(net.Conn)
 			if protocol.OPEN == wsResponse.Op {
-				if wsResponse.OpStatus != protocol.SUCCESS {
-					log.Debug("wsResponse.OpStatus failed")
-					closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
-					continue
-				}
-				wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-				if err != nil {
-					log.Error(err)
-				}
-				log.Debug(wl)
+				go func() {
+					if wsResponse.OpStatus != protocol.SUCCESS {
+						log.Debug("wsResponse.OpStatus failed")
+						closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
+						return
+					}
+					wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+					if err != nil {
+						log.Error(err)
+					}
+					log.Debug(wl)
+				}()
 			} else if protocol.DATA == wsResponse.Op {
-				socksConn.Write(wsResponse.Data)
+				go func() {
+					socksConn.Write(wsResponse.Data)
+				}()
 			} else if protocol.CLOSE == wsResponse.Op {
 				closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
 			} else {
