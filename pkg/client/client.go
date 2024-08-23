@@ -179,14 +179,18 @@ var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var socksWsKeyCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 func initWsClientCache(wsCount int, wsAddr string) {
-	for i := 0; i < wsCount; i++ {
-		newWsConn(strconv.Itoa(i), wsAddr)
-	}
-}
-
-func newWsConn(key string, wsAddr string) {
 	wsClientInitMu.Lock()
 	defer wsClientInitMu.Unlock()
+	wg := sync.WaitGroup{}
+	for i := 0; i < wsCount; i++ {
+		wg.Add(1)
+		go newWsConn(strconv.Itoa(i), wsAddr, &wg)
+	}
+	wg.Wait()
+}
+
+func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	_, found := wsClientCache.Get(key)
 	if found {
 		return
