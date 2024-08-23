@@ -24,12 +24,14 @@ type Config struct {
 }
 
 var wsClientInitMu sync.Mutex
-var chooseMu sync.Mutex
+var chooseRWMu sync.RWMutex
 
 // webSocket客户端连接数
 var initWsCount = 10
 var maxWsCount = 200
 var thresholdWsCount = 3
+
+var socksIdPrefix = strconv.Itoa(rand.Intn(10000))
 
 func Listen(config Config) {
 	log.SetLevel(log.INFO)
@@ -38,27 +40,19 @@ func Listen(config Config) {
 		log.Error(err)
 		return
 	}
-	//打印连接数
-	go func() {
-		for {
-			log.Info("socksServer连接数:" + strconv.Itoa(socksConnCache.ItemCount()))
-			wsKeyConnMap := getWsKeySocksConn()
-			wsKeyConn := ""
-			for wsKey := range wsKeyConnMap {
-				wsKeyConn += wsKey + ":" + strconv.Itoa(wsKeyConnMap[wsKey]) + ","
-			}
-			log.Info("webSocket连接数:" + strconv.Itoa(wsClientCache.ItemCount()) + ",分布情况:" + wsKeyConn)
-			time.Sleep(10 * time.Second)
-		}
-	}()
+
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(config.Socks5Port))
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	defer listener.Close()
+	//打开清理ws连接定时器
+	go cleanWsConn()
+	//打开运行状态打印
+	go info()
+	//监听连接
 	socksIdSeq := 0
-	socksIdPrefix := rand.Intn(10000)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -66,24 +60,50 @@ func Listen(config Config) {
 			continue
 		}
 		socksIdSeq += 1
-		wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq)
-		if wsCon == nil {
-			log.Error("wsCon null")
-			conn.Close()
-			continue
+		//异步动态扩容ws连接
+		go prepareWsClient(wsAddr)
+		//解析socks协议传输数据
+		go rwSocksConn(conn, wsAddr, socksIdSeq)
+	}
+}
+
+// 打印连接数
+func info() {
+	for {
+		log.Info("socksServer连接数:" + strconv.Itoa(socksConnCache.ItemCount()))
+		wsKeyConnMap := getWsKeySocksConn()
+		wsKeyConn := ""
+		for wsKey := range wsKeyConnMap {
+			wsKeyConn += wsKey + ":" + strconv.Itoa(wsKeyConnMap[wsKey]) + ","
 		}
-		go rwConn(wsCon, wsKey, conn, strconv.Itoa(socksIdPrefix)+":"+strconv.Itoa(socksIdSeq))
+		log.Info("webSocket连接数:" + strconv.Itoa(wsClientCache.ItemCount()) + ",分布情况:" + wsKeyConn)
+		time.Sleep(10 * time.Second)
+	}
+}
+
+// 定时器每60s检查有没有socks连接，没有连接就关闭ws连接
+func cleanWsConn() {
+	for {
+		time.Sleep(60 * time.Second)
+		chooseRWMu.Lock()
+		wsKeyConnMap := getWsKeySocksConn()
+		for wsKey, socksConn := range wsKeyConnMap {
+			if socksConn <= 0 {
+				wsConnObj, f := wsClientCache.Get(wsKey)
+				if f {
+					wsConn := wsConnObj.(*websocket.Conn)
+					closeWsConn(false, wsKey, wsConn)
+				}
+			}
+		}
+		chooseRWMu.Unlock()
 	}
 }
 
 func getWsKeySocksConn() map[string]int {
 	wsKeyConnMap := make(map[string]int)
-	for socksId := range socksWsKeyCache.Items() {
-		wsKey, found := socksWsKeyCache.Get(socksId)
-		if !found {
-			continue
-		}
-		wsKeyValue := wsKey.(string)
+	for _, wsKeyItem := range socksWsKeyCache.Items() {
+		wsKeyValue := wsKeyItem.Object.(string)
 		wsKeyConnMap[wsKeyValue] = wsKeyConnMap[wsKeyValue] + 1
 	}
 	return wsKeyConnMap
@@ -102,8 +122,8 @@ func wsAddr(config Config) (string, error) {
 }
 
 func chooseWsConn(tryCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
-	chooseMu.Lock()
-	defer chooseMu.Unlock()
+	chooseRWMu.RLock()
+	defer chooseRWMu.RUnlock()
 	return findWsConn(tryCount, wsAddr, socksIdSeq)
 }
 
@@ -180,21 +200,6 @@ func newWsConn(key string, wsAddr string) {
 
 	go func(key string, wsConn *websocket.Conn) {
 		defer closeWsConn(true, key, wsConn)
-		// 定时器每60s检查有没有socks连接，没有连接就关闭ws连接
-		go func() {
-			for {
-				time.Sleep(60 * time.Second)
-				chooseMu.Lock()
-				wsKeyConnMap := getWsKeySocksConn()
-				socksConn := wsKeyConnMap[key]
-				if socksConn <= 0 {
-					closeWsConn(false, key, wsConn)
-					chooseMu.Unlock()
-					return
-				}
-				chooseMu.Unlock()
-			}
-		}()
 		for {
 			var wsResponse protocol.WsProtocol
 			err = websocket.JSON.Receive(wsConn, &wsResponse)
@@ -236,8 +241,8 @@ func newWsConn(key string, wsAddr string) {
 func closeWsConn(lock bool, key string, wsConn *websocket.Conn) {
 	log.Info("webSocket closed key:" + key)
 	if lock {
-		chooseMu.Lock()
-		defer chooseMu.Unlock()
+		chooseRWMu.Lock()
+		defer chooseRWMu.Unlock()
 	}
 	//remove from cache
 	wsClientCache.Delete(key)
@@ -259,10 +264,10 @@ func closeWsConn(lock bool, key string, wsConn *websocket.Conn) {
 	}
 }
 
-func rwConn(wsCon *websocket.Conn, wsKey string, conn net.Conn, socksId string) {
+func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
+	socksId := socksIdPrefix + ":" + strconv.Itoa(socksIdSeq)
 	socksConnCache.SetDefault(socksId, conn)
-	socksWsKeyCache.SetDefault(socksId, wsKey)
-	defer closeSocksConn(wsCon, socksId, conn)
+	defer closeSocksConn(nil, socksId, conn)
 	reader := bufio.NewReader(conn)
 	version, err := reader.ReadByte()
 	if err != nil {
@@ -344,7 +349,13 @@ func rwConn(wsCon *websocket.Conn, wsKey string, conn net.Conn, socksId string) 
 	}
 	dstPort := int(p1)<<8 + int(p2)
 	log.Debug("dstAddr:", dstAddr, "dstPort:", dstPort)
-
+	wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq)
+	if wsCon == nil {
+		log.Warn("wsCon is nil")
+		return
+	}
+	socksWsKeyCache.SetDefault(socksId, wsKey)
+	defer closeSocksConn(wsCon, socksId, conn)
 	err = websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, DstAddrType: int(atyp), TargetAddr: dstAddr, TargetPort: dstPort})
 	if err != nil {
 		log.Error(err)
@@ -365,7 +376,9 @@ func rwConn(wsCon *websocket.Conn, wsKey string, conn net.Conn, socksId string) 
 
 func closeSocksConn(wsCon *websocket.Conn, socksId string, conn net.Conn) {
 	//remove from cache
-	websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
+	if wsCon != nil {
+		websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
+	}
 	socksConnCache.Delete(socksId)
 	socksWsKeyCache.Delete(socksId)
 	conn.Close()
