@@ -84,18 +84,18 @@ func info() {
 // 定时器每60s检查有没有socks连接，没有连接就关闭ws连接
 func cleanWsConn() {
 	for {
-		time.Sleep(60 * time.Second)
+		time.Sleep(10 * time.Second)
 		chooseRWMu.Lock()
+		wsClientInitMu.Lock()
 		wsKeyConnMap := getWsKeySocksConn()
-		for wsKey, socksConn := range wsKeyConnMap {
+		for wsKey, wsConnItem := range wsClientCache.Items() {
+			socksConn := wsKeyConnMap[wsKey]
 			if socksConn <= 0 {
-				wsConnObj, f := wsClientCache.Get(wsKey)
-				if f {
-					wsConn := wsConnObj.(*websocket.Conn)
-					closeWsConn(false, wsKey, wsConn)
-				}
+				wsConn := wsConnItem.Object.(*websocket.Conn)
+				closeWsConn(false, wsKey, wsConn)
 			}
 		}
+		wsClientInitMu.Unlock()
 		chooseRWMu.Unlock()
 	}
 }
