@@ -388,7 +388,7 @@ func closeSocksConn(wsCon *websocket.Conn, socksId string, conn net.Conn) {
 	conn.Close()
 }
 
-var jwtCache = cache.New(10*time.Hour, 10*time.Minute)
+var jwtCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 func genJwtToken(privateKeyFilePath string) (string, error) {
 
@@ -405,7 +405,7 @@ func genJwtToken(privateKeyFilePath string) (string, error) {
 	// 设置JWT的claims
 	claims := jwt.MapClaims{}
 	claims["name"] = "clientGo"
-	claims["exp"] = time.Now().Add(time.Hour * 24).Unix() // token过期时间
+	claims["exp"] = time.Now().Add(time.Hour * 24 * 365).Unix() // token过期时间
 
 	// 使用RS256算法生成token
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
