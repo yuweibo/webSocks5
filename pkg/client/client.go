@@ -85,6 +85,9 @@ func info() {
 func cleanWsConn() {
 	for {
 		time.Sleep(10 * time.Second)
+		if socksConnCache.ItemCount() > 0 {
+			continue
+		}
 		chooseRWMu.Lock()
 		wsClientInitMu.Lock()
 		wsKeyConnMap := getWsKeySocksConn()
