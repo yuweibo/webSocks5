@@ -80,10 +80,10 @@ func hello(c echo.Context) error {
 	return nil
 }
 
-func Listen() {
+func Listen(port string) {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.GET("/ws", hello)
-	e.Logger.Fatal(e.Start(":1323"))
+	e.Logger.Fatal(e.Start(":" + port))
 }
