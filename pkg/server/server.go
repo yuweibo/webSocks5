@@ -85,5 +85,8 @@ func Listen(port string) {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.GET("/ws", hello)
+	e.GET("/*", func(c echo.Context) error {
+		return c.String(200, "Hello, World!")
+	})
 	e.Logger.Fatal(e.Start(":" + port))
 }
