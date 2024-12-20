@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    
+    {
+      "name": "go run",
+      "type": "go",
+      "request": "launch",
+      "args": [],
+      "program": "${workspaceFolder}"
+    }
+  ]
+}
