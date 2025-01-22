@@ -6,7 +6,7 @@
     - 项目打包 go mod download & go build,得到二进制包webSocks5
     - 阿里云注册账号
     - 函数计算部署
-      - 打开链接 https://fcnext.console.aliyun.com/ap-northeast-1/functions
+      - 打开链接 https://fcnext.console.aliyun.com/us-west-1/functions
       - 确认地域
       - 创建web类型函数
       - 填写参数
@@ -28,5 +28,4 @@
     - 如果添加了jwt，需要添加参数指定私钥文件，例如-cjp="C:\Users\86176\go\src\kexueOneGo\privateKey.txt"
 - 访问
   - firefox
-    - 安装扩展 Proxy SwitchyOmega
     - 配置![image](img/firefox-config.png)
