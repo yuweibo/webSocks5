@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/labstack/gommon/log"
 	"github.com/patrickmn/go-cache"
@@ -12,15 +13,18 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"webSocks5/pkg/protocol"
 )
 
 type Config struct {
-	WsServerAddr          string
-	Socks5Port            int
-	JwtPrivateKeyFilePath string
+	WsServerAddr              string
+	Socks5Port                int
+	JwtPrivateKeyFilePath     string
+	ClientProxyDomainFilePath string
+	ForceWsProxy              bool
 }
 
 var wsClientInitMu sync.Mutex
@@ -40,6 +44,12 @@ func Listen(config Config) {
 		log.Error(err)
 		return
 	}
+	domains, err := readProxyDomain(config)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(domains)
 
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(config.Socks5Port))
 	if err != nil {
@@ -63,7 +73,7 @@ func Listen(config Config) {
 		//异步动态扩容ws连接
 		go prepareWsClient(wsAddr)
 		//解析socks协议传输数据
-		go rwSocksConn(conn, wsAddr, socksIdSeq)
+		go rwSocksConn(conn, wsAddr, socksIdSeq, domains, config.ForceWsProxy)
 	}
 }
 
@@ -271,7 +281,7 @@ func closeWsConn(lock bool, key string, wsConn *websocket.Conn) {
 	}
 }
 
-func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
+func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int, domains []string, forceWs bool) {
 	socksId := socksIdPrefix + ":" + strconv.Itoa(socksIdSeq)
 	socksConnCache.SetDefault(socksId, conn)
 	defer closeSocksConn(nil, socksId, conn)
@@ -356,17 +366,85 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 	}
 	dstPort := int(p1)<<8 + int(p2)
 	log.Debug("dstAddr:", dstAddr, "dstPort:", dstPort)
+
+	forceWsProxy := forceWsProxy(forceWs, domains, dstAddr, dstPort)
+	if forceWsProxy {
+		if wsProxy(conn, wsAddr, socksIdSeq, socksId, err, atyp, dstAddr, dstPort, reader) {
+			return
+		}
+	} else {
+		if directProxy(conn, wsAddr, socksIdSeq, dstAddr, dstPort, socksId, atyp, reader) {
+			return
+		}
+	}
+	log.Debug("socks connection closed")
+}
+
+func forceWsProxy(forceWs bool, domains []string, dstAddr string, dstPort int) bool {
+	if forceWs {
+		return true
+	}
+	include := false
+	for _, domain := range domains {
+		multiParts := strings.Contains(domain, ":")
+		if !multiParts {
+			if strings.Index(dstAddr, domain) > -1 {
+				include = true
+				break
+			}
+		} else {
+			parts := strings.SplitN(domain, ":", 2)
+			ip := parts[0]
+			port := parts[1]
+			if strings.Index(dstAddr, ip) > -1 && strconv.Itoa(dstPort) == port {
+				include = true
+				break
+			}
+		}
+	}
+	return include
+}
+
+func directProxy(conn net.Conn, wsAddr string, socksIdSeq int, dstAddr string, dstPort int, socksId string, atyp byte, reader *bufio.Reader) bool {
+	proxyConn, err := net.DialTimeout("tcp", dstAddr+":"+strconv.Itoa(dstPort), 5*time.Second)
+	if err != nil {
+		log.Error(err)
+		if wsProxy(conn, wsAddr, socksIdSeq, socksId, err, atyp, dstAddr, dstPort, reader) {
+			return true
+		}
+		return true
+	}
+	defer proxyConn.Close()
+	_, err = conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	if err != nil {
+		log.Error(err)
+		return true
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		io.Copy(proxyConn, conn)
+		cancel()
+	}()
+	go func() {
+		io.Copy(conn, proxyConn)
+		cancel()
+	}()
+	<-ctx.Done()
+	return false
+}
+
+func wsProxy(conn net.Conn, wsAddr string, socksIdSeq int, socksId string, err error, atyp byte, dstAddr string, dstPort int, reader *bufio.Reader) bool {
 	wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq)
 	if wsCon == nil {
 		log.Warn("wsCon is nil")
-		return
+		return true
 	}
 	socksWsKeyCache.SetDefault(socksId, wsKey)
 	defer closeSocksConn(wsCon, socksId, conn)
 	err = websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, DstAddrType: int(atyp), TargetAddr: dstAddr, TargetPort: dstPort})
 	if err != nil {
 		log.Error(err)
-		return
+		return true
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -376,9 +454,7 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 	}()
 
 	<-ctx.Done()
-
-	log.Debug("socks connection closed")
-
+	return false
 }
 
 func closeSocksConn(wsCon *websocket.Conn, socksId string, conn net.Conn) {
@@ -423,4 +499,20 @@ func genJwtToken(privateKeyFilePath string) (string, error) {
 	}
 	jwtCache.SetDefault(privateKeyFilePath, signedToken)
 	return signedToken, nil
+}
+
+func readProxyDomain(config Config) ([]string, error) {
+	if config.ClientProxyDomainFilePath != "" {
+		domain, err := os.ReadFile(config.ClientProxyDomainFilePath)
+		if err != nil {
+			return make([]string, 0), err
+		}
+		var domains []string
+		err = json.Unmarshal(domain, &domains)
+		if err != nil {
+			return make([]string, 0), err
+		}
+		return domains, nil
+	}
+	return make([]string, 0), nil
 }
