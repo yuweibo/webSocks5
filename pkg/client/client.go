@@ -23,6 +23,11 @@ type Config struct {
 	JwtPrivateKeyFilePath string
 }
 
+type WsConnectionType struct {
+	Connection *websocket.Conn
+	SocksIdMap map[string]*chan bool
+}
+
 var wsClientInitMu sync.Mutex
 var chooseRWMu sync.RWMutex
 
@@ -94,8 +99,8 @@ func cleanWsConn() {
 		for wsKey, wsConnItem := range wsClientCache.Items() {
 			socksConn := wsKeyConnMap[wsKey]
 			if socksConn <= 0 {
-				wsConn := wsConnItem.Object.(*websocket.Conn)
-				closeWsConn(false, wsKey, wsConn)
+				wsConnType := wsConnItem.Object.(*WsConnectionType)
+				closeWsConn(false, wsKey, wsConnType.Connection)
 			}
 		}
 		wsClientInitMu.Unlock()
@@ -124,13 +129,13 @@ func wsAddr(config Config) (string, error) {
 	return wsAddr, nil
 }
 
-func chooseWsConn(tryCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
+func chooseWsConn(tryCount int, wsAddr string, socksIdSeq int, socksId string, ch *chan bool) (*websocket.Conn, string) {
 	chooseRWMu.RLock()
 	defer chooseRWMu.RUnlock()
-	return findWsConn(tryCount, wsAddr, socksIdSeq)
+	return findWsConn(tryCount, wsAddr, socksIdSeq, socksId, ch)
 }
 
-func findWsConn(tryCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, string) {
+func findWsConn(tryCount int, wsAddr string, socksIdSeq int, socksId string, ch *chan bool) (*websocket.Conn, string) {
 	if tryCount >= 10 {
 		return nil, ""
 	}
@@ -156,11 +161,13 @@ func findWsConn(tryCount int, wsAddr string, socksIdSeq int) (*websocket.Conn, s
 		prepareWsClient(wsAddr)
 	}
 	key := strconv.Itoa(keyIndex)
-	ws, found := wsClientCache.Get(key)
+	wsType, found := wsClientCache.Get(key)
 	if !found {
-		return findWsConn(tryCount+1, wsAddr, socksIdSeq)
+		return findWsConn(tryCount+1, wsAddr, socksIdSeq, socksId, ch)
 	}
-	return ws.(*websocket.Conn), key
+	wwsType := wsType.(*WsConnectionType)
+	wwsType.SocksIdMap[socksId] = ch
+	return wwsType.Connection, key
 }
 
 func prepareWsClient(wsAddr string) {
@@ -203,9 +210,13 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 		log.Error(err)
 		return
 	}
-	wsClientCache.SetDefault(key, wsConn)
+	wsConnType := &WsConnectionType{
+		Connection: wsConn,
+		SocksIdMap: make(map[string]*chan bool), // 初始化 map
+	}
+	wsClientCache.SetDefault(key, wsConnType)
 
-	go func(key string, wsConn *websocket.Conn) {
+	go func(key string, wsConn *websocket.Conn, wsConnType *WsConnectionType) {
 		defer closeWsConn(true, key, wsConn)
 		for {
 			var wsResponse protocol.WsProtocol
@@ -222,8 +233,23 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 			socksConn := socksConnValue.(net.Conn)
 			if protocol.OPEN == wsResponse.Op {
 				go func() {
+					ch := wsConnType.SocksIdMap[wsResponse.SocksId]
+					defer func() {
+						_, ex := wsConnType.SocksIdMap[wsResponse.SocksId]
+						if ex {
+							delete(wsConnType.SocksIdMap, wsResponse.SocksId)
+						}
+					}()
 					if wsResponse.OpStatus != protocol.SUCCESS {
 						log.Debug("wsResponse.OpStatus failed")
+						if ch != nil {
+							select {
+							case *ch <- false:
+							default:
+								// 通道满或已关闭，避免 panic
+								log.Printf("Failed to send signal to channel for SocksId %v", wsResponse.SocksId)
+							}
+						}
 						closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
 						return
 					}
@@ -232,6 +258,14 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 						log.Error(err)
 					}
 					log.Debug(wl)
+					if ch != nil {
+						select {
+						case *ch <- err == nil:
+						default:
+							// 通道满或已关闭，避免 panic
+							log.Printf("Failed to send signal to channel for SocksId %v", wsResponse.SocksId)
+						}
+					}
 				}()
 			} else if protocol.DATA == wsResponse.Op {
 				socksConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
@@ -242,7 +276,7 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 				log.Error("Op not define:" + strconv.Itoa(wsResponse.Op))
 			}
 		}
-	}(key, wsConn)
+	}(key, wsConn, wsConnType)
 }
 
 func closeWsConn(lock bool, key string, wsConn *websocket.Conn) {
@@ -356,7 +390,10 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 	}
 	dstPort := int(p1)<<8 + int(p2)
 	log.Debug("dstAddr:", dstAddr, "dstPort:", dstPort)
-	wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq)
+	ch := make(chan bool)
+	defer close(ch)
+
+	wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq, socksId, &ch)
 	if wsCon == nil {
 		log.Warn("wsCon is nil")
 		return
@@ -368,17 +405,21 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 		log.Error(err)
 		return
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		io.Copy(protocol.WsWriteWrapper{WsConn: wsCon, SocksId: socksId}, reader)
-		cancel()
-	}()
-
-	<-ctx.Done()
-
+	select {
+	case success := <-ch:
+		log.Info("chan Received data:", success)
+		if success {
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				io.Copy(protocol.WsWriteWrapper{WsConn: wsCon, SocksId: socksId}, reader)
+				cancel()
+			}()
+			<-ctx.Done()
+		}
+	case <-time.After(5 * time.Second):
+		log.Warn("chan Request timed out")
+	}
 	log.Debug("socks connection closed")
-
 }
 
 func closeSocksConn(wsCon *websocket.Conn, socksId string, conn net.Conn) {
