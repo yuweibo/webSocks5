@@ -245,9 +245,10 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 						if ch != nil {
 							select {
 							case *ch <- false:
+								log.Error("error open SocksId %v", wsResponse.SocksId)
 							default:
 								// 通道满或已关闭，避免 panic
-								log.Printf("Failed to send signal to channel for SocksId %v", wsResponse.SocksId)
+								log.Error("error open2 SocksId %v", wsResponse.SocksId)
 							}
 						}
 						closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
@@ -263,7 +264,7 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 						case *ch <- err == nil:
 						default:
 							// 通道满或已关闭，避免 panic
-							log.Printf("Failed to send signal to channel for SocksId %v", wsResponse.SocksId)
+							log.Error("Failed to send signal to channel for SocksId %v", wsResponse.SocksId)
 						}
 					}
 				}()
@@ -416,8 +417,8 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 			}()
 			<-ctx.Done()
 		}
-	case <-time.After(5 * time.Second):
-		log.Warn("chan Request timed out")
+	case <-time.After(50 * time.Second):
+		log.Warn("chan Request timed out dstAddr:" + dstAddr)
 	}
 	log.Debug("socks connection closed")
 }
