@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -9,16 +10,18 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 	"webSocks5/pkg/protocol"
 )
 
 var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
+var socksConnLockCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 func hello(c echo.Context) error {
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer func() {
-			c.Logger().Info("wsClosed")
+			log.Info("wsClosed")
 			ws.Close()
 		}()
 		for {
@@ -26,26 +29,30 @@ func hello(c echo.Context) error {
 			var wsRequest protocol.WsProtocol
 			err := websocket.JSON.Receive(ws, &wsRequest)
 			if err != nil {
-				c.Logger().Error(err)
+				log.Error(err)
 				return
 			}
-			c.Logger().Info(wsRequest)
+			rstr, _ := json.Marshal(wsRequest)
+			log.Info(string(rstr))
 			socksId := wsRequest.SocksId
 			if protocol.OPEN == wsRequest.Op {
 				go func() {
 					clientConn, err := net.DialTimeout("tcp", wsRequest.Address(), 5*time.Second)
 					if err != nil {
-						c.Logger().Debug(err)
+						log.Error(socksId+":connect err:", err)
 						websocket.JSON.Send(ws, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, OpStatus: protocol.FAILURE})
 						return
 					}
+					socksConnCache.SetDefault(socksId, clientConn)
+					socksConnLockCache.SetDefault(socksId, &sync.Mutex{})
+					log.Info(socksId + ":send success")
 					err = websocket.JSON.Send(ws, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, OpStatus: protocol.SUCCESS})
 					if err != nil {
-						log.Error(err)
+						log.Error(socksId+":connect send err:", err)
 						clientConn.Close()
 					}
-					socksConnCache.SetDefault(socksId, clientConn)
 					defer func() {
+						socksConnLockCache.Delete(socksId)
 						socksConnCache.Delete(socksId)
 						clientConn.Close()
 						websocket.JSON.Send(ws, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
@@ -53,20 +60,32 @@ func hello(c echo.Context) error {
 					io.Copy(protocol.WsWriteWrapper{ws, socksId}, clientConn)
 				}()
 			} else if protocol.DATA == wsRequest.Op {
-				conn, found := socksConnCache.Get(socksId)
-				if !found {
-					log.Warn("SocksId not found in cache")
-					continue
-				}
-				c := conn.(net.Conn)
-				c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-				c.Write(wsRequest.Data)
+				go func() {
+					lock, f := socksConnLockCache.Get(socksId)
+					if !f {
+						log.Warn("SocksId lock not found in cache:" + socksId)
+						return
+					}
+					l := lock.(*sync.Mutex)
+					l.Lock()
+					defer l.Unlock()
+					conn, found := socksConnCache.Get(socksId)
+					if !found {
+						log.Warn("SocksId not found in cache")
+						return
+					}
+					log.Info(".........")
+					c := conn.(net.Conn)
+					c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+					c.Write(wsRequest.Data)
+				}()
 			} else if protocol.CLOSE == wsRequest.Op {
 				conn, found := socksConnCache.Get(socksId)
 				if !found {
 					log.Debug("socksId not found in cache,maybe closed")
 					continue
 				}
+				socksConnLockCache.Delete(socksId)
 				socksConnCache.Delete(socksId)
 				c := conn.(net.Conn)
 				c.Close()
