@@ -36,7 +36,10 @@ var initWsCount = 10
 var maxWsCount = 200
 var thresholdWsCount = 3
 
-var socksIdPrefix = strconv.Itoa(rand.Intn(10000))
+var socksIdPrefix = func() string {
+	rand.Seed(time.Now().UnixNano())
+	return strconv.Itoa(rand.Intn(10000))
+}()
 
 func Listen(config Config) {
 	log.SetLevel(log.INFO)
