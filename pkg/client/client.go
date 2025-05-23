@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
 	"github.com/labstack/gommon/log"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/net/websocket"
@@ -12,7 +13,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 	"webSocks5/pkg/protocol"
 )
@@ -25,16 +25,11 @@ type Config struct {
 
 type WsConnectionType struct {
 	Connection *websocket.Conn
-	SocksIdMap map[string]*chan bool
+	SocksConn  net.Conn
+	OpenChan   *chan bool
+	count      int64
+	closed     bool
 }
-
-var wsClientInitMu sync.Mutex
-var chooseRWMu sync.RWMutex
-
-// webSocket客户端连接数
-var initWsCount = 10
-var maxWsCount = 200
-var thresholdWsCount = 3
 
 var socksIdPrefix = func() string {
 	rand.Seed(time.Now().UnixNano())
@@ -59,6 +54,8 @@ func Listen(config Config) {
 	go cleanWsConn()
 	//打开运行状态打印
 	go info()
+	//预创建ws连接
+	go prepareWsClient(wsAddr)
 	//监听连接
 	socksIdSeq := 0
 	for {
@@ -68,10 +65,8 @@ func Listen(config Config) {
 			continue
 		}
 		socksIdSeq += 1
-		//异步动态扩容ws连接
-		go prepareWsClient(wsAddr)
 		//解析socks协议传输数据
-		go rwSocksConn(conn, wsAddr, socksIdSeq)
+		go rwSocksConn(wsAddr, conn, socksIdSeq)
 	}
 }
 
@@ -79,12 +74,14 @@ func Listen(config Config) {
 func info() {
 	for {
 		log.Info("socksServer连接数:" + strconv.Itoa(socksConnCache.ItemCount()))
-		wsKeyConnMap := getWsKeySocksConn()
-		wsKeyConn := ""
-		for wsKey := range wsKeyConnMap {
-			wsKeyConn += wsKey + ":" + strconv.Itoa(wsKeyConnMap[wsKey]) + ","
+		log.Info("webSocket连接数:" + strconv.Itoa(wsClientCache.ItemCount()))
+		log.Info("wsTypeChan:" + strconv.Itoa(len(wsTypeChan)))
+		var totalCount int64 = 0
+		for _, item := range wsClientCache.Items() {
+			wsConnType := item.Object.(*WsConnectionType)
+			totalCount += wsConnType.count
 		}
-		log.Info("webSocket连接数:" + strconv.Itoa(wsClientCache.ItemCount()) + ",分布情况:" + wsKeyConn)
+		log.Info("wsReuseCount:" + strconv.FormatInt(totalCount, 10))
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -96,28 +93,14 @@ func cleanWsConn() {
 		if socksConnCache.ItemCount() > 0 {
 			continue
 		}
-		chooseRWMu.Lock()
-		wsClientInitMu.Lock()
-		wsKeyConnMap := getWsKeySocksConn()
 		for wsKey, wsConnItem := range wsClientCache.Items() {
-			socksConn := wsKeyConnMap[wsKey]
-			if socksConn <= 0 {
-				wsConnType := wsConnItem.Object.(*WsConnectionType)
-				closeWsConn(false, wsKey, wsConnType.Connection)
-			}
+			wsConnType := wsConnItem.Object.(*WsConnectionType)
+			closeWsConn(wsKey, wsConnType)
 		}
-		wsClientInitMu.Unlock()
-		chooseRWMu.Unlock()
+		//清空wsTypeChan
+		close(wsTypeChan)
+		wsTypeChan = make(chan *WsConnectionType, 10)
 	}
-}
-
-func getWsKeySocksConn() map[string]int {
-	wsKeyConnMap := make(map[string]int)
-	for _, wsKeyItem := range socksWsKeyCache.Items() {
-		wsKeyValue := wsKeyItem.Object.(string)
-		wsKeyConnMap[wsKeyValue] = wsKeyConnMap[wsKeyValue] + 1
-	}
-	return wsKeyConnMap
 }
 
 func wsAddr(config Config) (string, error) {
@@ -132,78 +115,50 @@ func wsAddr(config Config) (string, error) {
 	return wsAddr, nil
 }
 
-func chooseWsConn(tryCount int, wsAddr string, socksIdSeq int, socksId string, ch *chan bool) (*websocket.Conn, string) {
-	chooseRWMu.RLock()
-	defer chooseRWMu.RUnlock()
-	return findWsConn(tryCount, wsAddr, socksIdSeq, socksId, ch)
-}
-
-func findWsConn(tryCount int, wsAddr string, socksIdSeq int, socksId string, ch *chan bool) (*websocket.Conn, string) {
-	if tryCount >= 10 {
-		return nil, ""
-	}
-	wsClientSize := wsClientCache.ItemCount()
-	if wsClientSize == 0 {
-		//同步初始化ws连接
-		initWsClientCache(initWsCount, wsAddr)
-	}
-	//异步动态扩容ws连接
-	go prepareWsClient(wsAddr)
-	keyIndex := 0
-	//最少连接数查找
-	sockSConn := 1000000
-	for wsKey := range wsClientCache.Items() {
-		cacheCount := getWsKeySocksConn()[wsKey]
-		if cacheCount < sockSConn {
-			keyIndex, _ = strconv.Atoi(wsKey)
-			sockSConn = cacheCount
+func selectWsTypeConn(wsAddr string, conn net.Conn, ch *chan bool) *WsConnectionType {
+	tryCount := 0
+	for {
+		if tryCount > 10 {
+			return nil
 		}
+		select {
+		case wsType := <-wsTypeChan:
+			socksConn := wsType.SocksConn
+			if wsType.closed {
+				log.Warn("wsType closed")
+			}
+			if socksConn == nil && !wsType.closed {
+				wsType.SocksConn = conn
+				wsType.OpenChan = ch
+				wsType.count += 1
+				return wsType
+			}
+		case <-time.After(time.Second):
+			newWsConn(uuid.NewString(), wsAddr)
+		}
+		tryCount++
 	}
-	if sockSConn >= thresholdWsCount {
-		keyIndex = -1
-		prepareWsClient(wsAddr)
-	}
-	key := strconv.Itoa(keyIndex)
-	wsType, found := wsClientCache.Get(key)
-	if !found {
-		return findWsConn(tryCount+1, wsAddr, socksIdSeq, socksId, ch)
-	}
-	wwsType := wsType.(*WsConnectionType)
-	wwsType.SocksIdMap[socksId] = ch
-	return wwsType.Connection, key
 }
 
 func prepareWsClient(wsAddr string) {
-	wsClientSize := wsClientCache.ItemCount()
-	if wsClientSize != 0 {
-		wsClientAvg := socksConnCache.ItemCount() / wsClientSize
-		if wsClientAvg >= thresholdWsCount {
-			prepareWsSize := (socksConnCache.ItemCount() / thresholdWsCount) + 1
-			if prepareWsSize > maxWsCount {
-				prepareWsSize = maxWsCount
-			}
-			initWsClientCache(prepareWsSize, wsAddr)
+	for {
+		if socksConnCache.ItemCount() > 0 {
+			id := uuid.NewString()
+			newWsConn(id, wsAddr)
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
 var wsClientCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
-var socksWsKeyCache = cache.New(cache.NoExpiration, cache.NoExpiration)
+var wsTypeChan = make(chan *WsConnectionType, 10)
 
-func initWsClientCache(wsCount int, wsAddr string) {
-	wsClientInitMu.Lock()
-	defer wsClientInitMu.Unlock()
-	wg := sync.WaitGroup{}
-	for i := 0; i < wsCount; i++ {
-		wg.Add(1)
-		go newWsConn(strconv.Itoa(i), wsAddr, &wg)
+func newWsConn(key string, wsAddr string) {
+	if wsClientCache.ItemCount() >= 200 {
+		log.Warn("wsClientCache too many")
+		return
 	}
-	wg.Wait()
-}
-
-func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
-	defer wg.Done()
 	_, found := wsClientCache.Get(key)
 	if found {
 		return
@@ -215,12 +170,19 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 	}
 	wsConnType := &WsConnectionType{
 		Connection: wsConn,
-		SocksIdMap: make(map[string]*chan bool), // 初始化 map
+		SocksConn:  nil,
+		OpenChan:   nil,
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			// 捕获并忽略 panic
+			log.Error("Suppressing panic2:", r)
+		}
+	}()
 	wsClientCache.SetDefault(key, wsConnType)
-
+	wsTypeChan <- wsConnType
 	go func(key string, wsConn *websocket.Conn, wsConnType *WsConnectionType) {
-		defer closeWsConn(true, key, wsConn)
+		defer closeWsConn(key, wsConnType)
 		for {
 			var wsResponse protocol.WsProtocol
 			err = websocket.JSON.Receive(wsConn, &wsResponse)
@@ -236,12 +198,12 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 			socksConn := socksConnValue.(net.Conn)
 			if protocol.OPEN == wsResponse.Op {
 				go func() {
-					ch := wsConnType.SocksIdMap[wsResponse.SocksId]
+					ch := wsConnType.OpenChan
+					if ch == nil {
+						return
+					}
 					defer func() {
-						_, ex := wsConnType.SocksIdMap[wsResponse.SocksId]
-						if ex {
-							delete(wsConnType.SocksIdMap, wsResponse.SocksId)
-						}
+						wsConnType.OpenChan = nil
 					}()
 					if wsResponse.OpStatus != protocol.SUCCESS {
 						log.Debug("wsResponse.OpStatus failed")
@@ -254,7 +216,7 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 								log.Error("error open2 SocksId %v", wsResponse.SocksId)
 							}
 						}
-						closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
+						closeSocksConn(wsConnType, wsResponse.SocksId, socksConn)
 						return
 					}
 					wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
@@ -275,41 +237,36 @@ func newWsConn(key string, wsAddr string, wg *sync.WaitGroup) {
 				socksConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				socksConn.Write(wsResponse.Data)
 			} else if protocol.CLOSE == wsResponse.Op {
-				closeSocksConn(wsConn, wsResponse.SocksId, socksConn)
+				closeSocksConn(wsConnType, wsResponse.SocksId, socksConn)
 			} else {
 				log.Error("Op not define:" + strconv.Itoa(wsResponse.Op))
 			}
 		}
 	}(key, wsConn, wsConnType)
+
 }
 
-func closeWsConn(lock bool, key string, wsConn *websocket.Conn) {
+func closeWsConn(key string, wsType *WsConnectionType) {
 	log.Info("webSocket closed key:" + key)
-	if lock {
-		chooseRWMu.Lock()
-		defer chooseRWMu.Unlock()
-	}
 	//remove from cache
 	wsClientCache.Delete(key)
+	wsType.closed = true
 	//ws conn close
+	wsConn := wsType.Connection
 	wsConn.Close()
 	//关闭关联的socks连接
-	for socksId := range socksWsKeyCache.Items() {
-		wsKey, found := socksWsKeyCache.Get(socksId)
-		if !found {
-			continue
-		}
-		if wsKey == key {
-			con, f := socksConnCache.Get(socksId)
-			if f {
-				socksConn := con.(net.Conn)
-				closeSocksConn(wsConn, socksId, socksConn)
-			}
-		}
+	socksConn := wsType.SocksConn
+	if socksConn != nil {
+		socksConn.Close()
+	}
+	//关闭关联的通道
+	ch := wsType.OpenChan
+	if ch != nil {
+		close(*ch)
 	}
 }
 
-func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
+func rwSocksConn(wsAddr string, conn net.Conn, socksIdSeq int) {
 	socksId := socksIdPrefix + ":" + strconv.Itoa(socksIdSeq)
 	socksConnCache.SetDefault(socksId, conn)
 	defer closeSocksConn(nil, socksId, conn)
@@ -397,14 +354,13 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 	ch := make(chan bool)
 	defer close(ch)
 
-	wsCon, wsKey := chooseWsConn(0, wsAddr, socksIdSeq, socksId, &ch)
-	if wsCon == nil {
+	wsConType := selectWsTypeConn(wsAddr, conn, &ch)
+	if wsConType == nil {
 		log.Warn("wsCon is nil")
 		return
 	}
-	socksWsKeyCache.SetDefault(socksId, wsKey)
-	defer closeSocksConn(wsCon, socksId, conn)
-	err = websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, DstAddrType: int(atyp), TargetAddr: dstAddr, TargetPort: dstPort})
+	defer closeSocksConn(wsConType, socksId, conn)
+	err = websocket.JSON.Send(wsConType.Connection, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, DstAddrType: int(atyp), TargetAddr: dstAddr, TargetPort: dstPort})
 	if err != nil {
 		log.Error(err)
 		return
@@ -415,7 +371,7 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 		if success {
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
-				io.Copy(protocol.WsWriteWrapper{WsConn: wsCon, SocksId: socksId}, reader)
+				io.Copy(protocol.WsWriteWrapper{WsConn: wsConType.Connection, SocksId: socksId}, reader)
 				cancel()
 			}()
 			<-ctx.Done()
@@ -426,13 +382,31 @@ func rwSocksConn(conn net.Conn, wsAddr string, socksIdSeq int) {
 	log.Debug("socks connection closed")
 }
 
-func closeSocksConn(wsCon *websocket.Conn, socksId string, conn net.Conn) {
-	//remove from cache
-	if wsCon != nil {
-		websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
+func closeSocksConn(wsConnType *WsConnectionType, socksId string, conn net.Conn) {
+	if wsConnType != nil {
+		defer func() {
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// 捕获并忽略 panic
+						log.Error("Suppressing panic:", r)
+					}
+				}()
+				// 将wsConnType重新放入缓存
+				now := time.Now()
+				wsTypeChan <- wsConnType
+				log.Info("return to wsTypeChan cost:", time.Since(now))
+			}()
+		}()
+		wsConnType.SocksConn = nil
+		wsConnType.OpenChan = nil
+		wsCon := wsConnType.Connection
+		//remove from cache
+		if wsCon != nil {
+			websocket.JSON.Send(wsCon, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
+		}
 	}
 	socksConnCache.Delete(socksId)
-	socksWsKeyCache.Delete(socksId)
 	conn.Close()
 }
 
