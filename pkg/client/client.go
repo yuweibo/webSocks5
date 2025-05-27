@@ -267,6 +267,12 @@ func closeWsConn(key string, wsType *WsConnectionType) {
 }
 
 func rwSocksConn(wsAddr string, conn net.Conn, socksIdSeq int) {
+	defer func() {
+		if r := recover(); r != nil {
+			// 捕获并忽略 panic
+			log.Error("Suppressing rwSocksConn panic:", r)
+		}
+	}()
 	socksId := socksIdPrefix + ":" + strconv.Itoa(socksIdSeq)
 	socksConnCache.SetDefault(socksId, conn)
 	defer closeSocksConn(nil, socksId, conn)
