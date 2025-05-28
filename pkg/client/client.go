@@ -99,7 +99,7 @@ func cleanWsConn() {
 		}
 		//清空wsTypeChan
 		close(wsTypeChan)
-		wsTypeChan = make(chan *WsConnectionType, 10)
+		wsTypeChan = make(chan *WsConnectionType, 200)
 	}
 }
 
@@ -152,11 +152,11 @@ func prepareWsClient(wsAddr string) {
 
 var wsClientCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
-var wsTypeChan = make(chan *WsConnectionType, 10)
+var wsTypeChan = make(chan *WsConnectionType, 200)
 
 func newWsConn(key string, wsAddr string) {
-	if wsClientCache.ItemCount() >= 200 {
-		log.Warn("wsClientCache too many")
+	if wsClientCache.ItemCount() >= 100 {
+		//log.Warn("wsClientCache too many")
 		return
 	}
 	_, found := wsClientCache.Get(key)
@@ -216,7 +216,7 @@ func newWsConn(key string, wsAddr string) {
 								log.Error("error open2 SocksId %v", wsResponse.SocksId)
 							}
 						}
-						closeSocksConn(wsConnType, wsResponse.SocksId, socksConn)
+						closeSocksConn(nil, wsResponse.SocksId, socksConn)
 						return
 					}
 					wl, err := socksConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
@@ -237,7 +237,7 @@ func newWsConn(key string, wsAddr string) {
 				socksConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				socksConn.Write(wsResponse.Data)
 			} else if protocol.CLOSE == wsResponse.Op {
-				closeSocksConn(wsConnType, wsResponse.SocksId, socksConn)
+				closeSocksConn(nil, wsResponse.SocksId, socksConn)
 			} else {
 				log.Error("Op not define:" + strconv.Itoa(wsResponse.Op))
 			}
