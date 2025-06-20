@@ -10,13 +10,11 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"sync"
 	"time"
 	"webSocks5/pkg/protocol"
 )
 
 var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
-var socksConnLockCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 func hello(c echo.Context) error {
 	websocket.Handler(func(ws *websocket.Conn) {
@@ -44,7 +42,6 @@ func hello(c echo.Context) error {
 						return
 					}
 					socksConnCache.SetDefault(socksId, clientConn)
-					socksConnLockCache.SetDefault(socksId, &sync.Mutex{})
 					log.Info(socksId + ":send success")
 					err = websocket.JSON.Send(ws, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, OpStatus: protocol.SUCCESS})
 					if err != nil {
@@ -52,7 +49,6 @@ func hello(c echo.Context) error {
 						clientConn.Close()
 					}
 					defer func() {
-						socksConnLockCache.Delete(socksId)
 						socksConnCache.Delete(socksId)
 						clientConn.Close()
 						websocket.JSON.Send(ws, protocol.WsProtocol{SocksId: socksId, Op: protocol.CLOSE})
@@ -60,32 +56,21 @@ func hello(c echo.Context) error {
 					io.Copy(protocol.WsWriteWrapper{ws, socksId}, clientConn)
 				}()
 			} else if protocol.DATA == wsRequest.Op {
-				go func() {
-					lock, f := socksConnLockCache.Get(socksId)
-					if !f {
-						log.Warn("SocksId lock not found in cache:" + socksId)
-						return
-					}
-					l := lock.(*sync.Mutex)
-					l.Lock()
-					defer l.Unlock()
-					conn, found := socksConnCache.Get(socksId)
-					if !found {
-						log.Warn("SocksId not found in cache")
-						return
-					}
-					log.Info(".........")
-					c := conn.(net.Conn)
-					c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-					c.Write(wsRequest.Data)
-				}()
+				conn, found := socksConnCache.Get(socksId)
+				if !found {
+					log.Warn("SocksId not found in cache")
+					return
+				}
+				log.Info(".........")
+				c := conn.(net.Conn)
+				c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				c.Write(wsRequest.Data)
 			} else if protocol.CLOSE == wsRequest.Op {
 				conn, found := socksConnCache.Get(socksId)
 				if !found {
 					log.Debug("socksId not found in cache,maybe closed")
 					continue
 				}
-				socksConnLockCache.Delete(socksId)
 				socksConnCache.Delete(socksId)
 				c := conn.(net.Conn)
 				c.Close()
