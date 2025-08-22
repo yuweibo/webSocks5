@@ -21,6 +21,11 @@ type Config struct {
 	WsServerAddr          string
 	Socks5Port            int
 	JwtPrivateKeyFilePath string
+	WsAutoClose           bool
+	//webSocket初始化连接数
+	WsConnInitSize int
+	//webSocket最大连接数
+	WsConnMaxSize int
 }
 
 type WsConnectionType struct {
@@ -51,11 +56,13 @@ func Listen(config Config) {
 	}
 	defer listener.Close()
 	//打开清理ws连接定时器
-	go cleanWsConn()
+	if config.WsAutoClose {
+		go cleanWsConn()
+	}
 	//打开运行状态打印
 	go info()
 	//预创建ws连接
-	go prepareWsClient(wsAddr)
+	go prepareWsClient(wsAddr, config)
 	//监听连接
 	socksIdSeq := 0
 	for {
@@ -66,7 +73,7 @@ func Listen(config Config) {
 		}
 		socksIdSeq += 1
 		//解析socks协议传输数据
-		go rwSocksConn(wsAddr, conn, socksIdSeq)
+		go rwSocksConn(wsAddr, conn, socksIdSeq, config)
 	}
 }
 
@@ -115,7 +122,7 @@ func wsAddr(config Config) (string, error) {
 	return wsAddr, nil
 }
 
-func selectWsTypeConn(wsAddr string, conn net.Conn, ch *chan bool) *WsConnectionType {
+func selectWsTypeConn(wsAddr string, conn net.Conn, ch *chan bool, config Config) *WsConnectionType {
 	tryCount := 0
 	for {
 		if tryCount > 10 {
@@ -134,17 +141,21 @@ func selectWsTypeConn(wsAddr string, conn net.Conn, ch *chan bool) *WsConnection
 				return wsType
 			}
 		case <-time.After(time.Second):
-			newWsConn(uuid.NewString(), wsAddr)
+			newWsConn(uuid.NewString(), wsAddr, config)
 		}
 		tryCount++
 	}
 }
 
-func prepareWsClient(wsAddr string) {
+func prepareWsClient(wsAddr string, config Config) {
 	for {
 		if socksConnCache.ItemCount() > 0 {
+			if wsClientCache.ItemCount() >= config.WsConnInitSize {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			id := uuid.NewString()
-			newWsConn(id, wsAddr)
+			newWsConn(id, wsAddr, config)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -154,8 +165,8 @@ var wsClientCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var socksConnCache = cache.New(cache.NoExpiration, cache.NoExpiration)
 var wsTypeChan = make(chan *WsConnectionType, 200)
 
-func newWsConn(key string, wsAddr string) {
-	if wsClientCache.ItemCount() >= 100 {
+func newWsConn(key string, wsAddr string, config Config) {
+	if wsClientCache.ItemCount() >= config.WsConnMaxSize {
 		//log.Warn("wsClientCache too many")
 		return
 	}
@@ -210,10 +221,10 @@ func newWsConn(key string, wsAddr string) {
 						if ch != nil {
 							select {
 							case *ch <- false:
-								log.Error("error open SocksId %v", wsResponse.SocksId)
+								log.Error("error open SocksId ", wsResponse.SocksId)
 							default:
 								// 通道满或已关闭，避免 panic
-								log.Error("error open2 SocksId %v", wsResponse.SocksId)
+								log.Error("error open2 SocksId ", wsResponse.SocksId)
 							}
 						}
 						closeSocksConn(nil, wsResponse.SocksId, socksConn)
@@ -229,7 +240,7 @@ func newWsConn(key string, wsAddr string) {
 						case *ch <- err == nil:
 						default:
 							// 通道满或已关闭，避免 panic
-							log.Error("Failed to send signal to channel for SocksId %v", wsResponse.SocksId)
+							log.Error("Failed to send signal to channel for SocksId ", wsResponse.SocksId)
 						}
 					}
 				}()
@@ -266,7 +277,7 @@ func closeWsConn(key string, wsType *WsConnectionType) {
 	}
 }
 
-func rwSocksConn(wsAddr string, conn net.Conn, socksIdSeq int) {
+func rwSocksConn(wsAddr string, conn net.Conn, socksIdSeq int, config Config) {
 	defer func() {
 		if r := recover(); r != nil {
 			// 捕获并忽略 panic
@@ -360,7 +371,7 @@ func rwSocksConn(wsAddr string, conn net.Conn, socksIdSeq int) {
 	ch := make(chan bool)
 	defer close(ch)
 
-	wsConType := selectWsTypeConn(wsAddr, conn, &ch)
+	wsConType := selectWsTypeConn(wsAddr, conn, &ch, config)
 	if wsConType == nil {
 		log.Warn("wsCon is nil")
 		return
