@@ -35,7 +35,7 @@ func hello(c echo.Context) error {
 			socksId := wsRequest.SocksId
 			if protocol.OPEN == wsRequest.Op {
 				go func() {
-					clientConn, err := net.DialTimeout("tcp", wsRequest.Address(), 5*time.Second)
+					clientConn, err := net.DialTimeout("tcp", wsRequest.Address(), 1*time.Second)
 					if err != nil {
 						log.Error(socksId+":connect err:", err)
 						websocket.JSON.Send(ws, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, OpStatus: protocol.FAILURE})

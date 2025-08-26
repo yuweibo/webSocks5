@@ -221,10 +221,10 @@ func newWsConn(key string, wsAddr string, config Config) {
 						if ch != nil {
 							select {
 							case *ch <- false:
-								log.Error("error open SocksId ", wsResponse.SocksId)
+								log.Warn("error open SocksId ", wsResponse.SocksId)
 							default:
 								// 通道满或已关闭，避免 panic
-								log.Error("error open2 SocksId ", wsResponse.SocksId)
+								log.Warn("error open2 SocksId ", wsResponse.SocksId)
 							}
 						}
 						closeSocksConn(nil, wsResponse.SocksId, socksConn)
@@ -378,20 +378,23 @@ func rwSocksConn(wsAddr string, conn net.Conn, socksIdSeq int, config Config) {
 	}
 	defer closeSocksConn(wsConType, socksId, conn)
 	err = websocket.JSON.Send(wsConType.Connection, protocol.WsProtocol{SocksId: socksId, Op: protocol.OPEN, DstAddrType: int(atyp), TargetAddr: dstAddr, TargetPort: dstPort})
+	start := time.Now()
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	select {
 	case success := <-ch:
-		log.Info("chan Received data:", success)
 		if success {
+			log.Infof("open chan Received true,cost:%d", time.Since(start).Milliseconds())
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				io.Copy(protocol.WsWriteWrapper{WsConn: wsConType.Connection, SocksId: socksId}, reader)
 				cancel()
 			}()
 			<-ctx.Done()
+		} else {
+			log.Warnf("open chan Received false,cost:%d,dstAddr:%s", time.Since(start).Milliseconds(), dstAddr)
 		}
 	case <-time.After(50 * time.Second):
 		log.Warn("chan Request timed out dstAddr:" + dstAddr)
