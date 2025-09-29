@@ -1,0 +1,1089 @@
+# 1. 固定开头
+port: 7890                 # HTTP 代理端口
+socks-port: 7891           # SOCKS5 端口
+mixed-port: 7892           # 混合端口（Meta 专属，可选）
+mode: rule                 # rule / global / direct
+log-level: info            # silent/error/warning/info/debug
+ipv6: true                 # 启用 IPv6 解析
+allow-lan: true            # 局域网共享
+external-controller: 127.0.0.1:9090   # WebUI
+secret: ""                 # WebUI 密码，空=免密
+
+# 3. 可选段落（Meta 扩展）
+dns:               {}      # 智能 DNS
+proxy-providers:   {}      # 远程订阅
+rule-providers:    {}      # 远程规则
+script:            {}      # JavaScript 高级脚本
+
+proxies:
+  - name: way1
+    type: socks5
+    server: 127.0.0.1
+    port: 1080
+    udp: false
+  - name: way2
+    type: socks5
+    server: 127.0.0.1
+    port: 1081
+    udp: false
+
+proxy-groups:
+  - name: LocalCloud
+    type: select
+    proxies: [way1,way2]
+    url: https://github.com
+    interval: 300
+    strategy: round-robin
+
+rules:
+  - "DOMAIN-SUFFIX,prosody.im,LocalCloud"
+
+  - "DOMAIN-SUFFIX,apache.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fcapp.run,DIRECT"
+
+  - "DOMAIN-SUFFIX,pan666.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fonts.gstatic.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,acer.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,googleapis.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ipv6.msftncsi.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ipv6.msftconnecttest.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,pv6.msftncsi.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,windowsupdate.com,LocalCloud"
+
+  - "DOMAIN,ch-cn.appleunsync.org,DIRECT"
+
+  - "DOMAIN-SUFFIX,dingtalk.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,services.googleapis.cn,LocalCloud"
+
+  - "DOMAIN-SUFFIX,xn--ngstr-lra8j.com,LocalCloud"
+
+  - "DOMAIN,safebrowsing.urlsec.qq.com,DIRECT"
+
+  - "DOMAIN,safebrowsing.googleapis.com,DIRECT"
+
+  - "DOMAIN,developer.apple.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,digicert.com,LocalCloud"
+
+  - "DOMAIN,ocsp.apple.com,LocalCloud"
+
+  - "DOMAIN,ocsp.comodoca.com,LocalCloud"
+
+  - "DOMAIN,ocsp.usertrust.com,LocalCloud"
+
+  - "DOMAIN,ocsp.sectigo.com,LocalCloud"
+
+  - "DOMAIN,ocsp.verisign.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,apple-dns.net,LocalCloud"
+
+  - "DOMAIN,testflight.apple.com,LocalCloud"
+
+  - "DOMAIN,sandbox.itunes.apple.com,LocalCloud"
+
+  - "DOMAIN,itunes.apple.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,apps.apple.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blobstore.apple.com,LocalCloud"
+
+  - "DOMAIN,cvws.icloud-content.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mzstatic.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,itunes.apple.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,icloud.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,icloud-content.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,me.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,aaplimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,cdn20.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,cdn-apple.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,akadns.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,akamaiedge.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,edgekey.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,mwcloudcdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,mwcname.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,apple.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,apple-cloudkit.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,apple-mapkit.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,126.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,126.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,127.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,163.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,360buyimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,36kr.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,acfun.tv,DIRECT"
+
+  - "DOMAIN-SUFFIX,air-matters.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,aixifan.com,DIRECT"
+
+  - "DOMAIN-KEYWORD,alicdn,DIRECT"
+
+  - "DOMAIN-KEYWORD,alipay,DIRECT"
+
+  - "DOMAIN-KEYWORD,taobao,DIRECT"
+
+  - "DOMAIN-SUFFIX,amap.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,autonavi.com,DIRECT"
+
+  - "DOMAIN-KEYWORD,baidu,DIRECT"
+
+  - "DOMAIN-SUFFIX,bdimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,bdstatic.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,bilibili.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,bilivideo.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,caiyunapp.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,clouddn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,cnbeta.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,cnbetacdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,cootekservice.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,csdn.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,ctrip.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,dgtle.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,dianping.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,douban.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,doubanio.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,duokan.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,easou.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ele.me,DIRECT"
+
+  - "DOMAIN-SUFFIX,feng.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,fir.im,DIRECT"
+
+  - "DOMAIN-SUFFIX,frdic.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,g-cores.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,godic.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,gtimg.com,DIRECT"
+
+  - "DOMAIN,cdn.hockeyapp.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,hongxiu.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,hxcdn.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,iciba.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ifeng.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ifengimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ipip.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,iqiyi.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,jd.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,jianshu.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,knewone.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,le.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,lecloud.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,lemicp.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,licdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,luoo.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,meituan.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,meituan.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,mi.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,miaopai.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,microsoft.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,microsoftonline.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,miui.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,miwifi.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,mob.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,netease.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,office.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,office365.com,DIRECT"
+
+  - "DOMAIN-KEYWORD,officecdn,DIRECT"
+
+  - "DOMAIN-SUFFIX,oschina.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,ppsimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,pstatp.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qcloud.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qdaily.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qdmm.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qhimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qhres.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qidian.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qihucdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qiniu.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qiniucdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qiyipic.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qq.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,qqurl.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,rarbg.to,DIRECT"
+
+  - "DOMAIN-SUFFIX,ruguoapp.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,segmentfault.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,sinaapp.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,smzdm.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,snapdrop.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,sogou.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,sogoucdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,sohu.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,soku.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,speedtest.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,sspai.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,suning.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,taobao.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,tencent.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,tenpay.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,tianyancha.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,tmall.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,tudou.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,umetrip.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,upaiyun.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,upyun.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,veryzhun.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,weather.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,weibo.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,xiami.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,xiami.net,DIRECT"
+
+  - "DOMAIN-SUFFIX,xiaomicp.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ximalaya.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,xmcdn.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,xunlei.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,yhd.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,yihaodianimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,yinxiang.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,ykimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,youdao.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,youku.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,zealer.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,zhihu.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,zhimg.com,DIRECT"
+
+  - "DOMAIN-SUFFIX,zimuzu.tv,DIRECT"
+
+  - "DOMAIN-SUFFIX,zoho.com,DIRECT"
+
+  - "DOMAIN-KEYWORD,amazon,LocalCloud"
+
+  - "DOMAIN-KEYWORD,google,LocalCloud"
+
+  - "DOMAIN-KEYWORD,gmail,LocalCloud"
+
+  - "DOMAIN-KEYWORD,youtube,LocalCloud"
+
+  - "DOMAIN-KEYWORD,facebook,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fb.me,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fbcdn.net,LocalCloud"
+
+  - "DOMAIN-KEYWORD,twitter,LocalCloud"
+
+  - "DOMAIN-KEYWORD,instagram,LocalCloud"
+
+  - "DOMAIN-KEYWORD,dropbox,LocalCloud"
+
+  - "DOMAIN-SUFFIX,twimg.com,LocalCloud"
+
+  - "DOMAIN-KEYWORD,blogspot,LocalCloud"
+
+  - "DOMAIN-SUFFIX,youtu.be,LocalCloud"
+
+  - "DOMAIN-KEYWORD,whatsapp,LocalCloud"
+
+  - "DOMAIN-KEYWORD,admarvel,REJECT"
+
+  - "DOMAIN-KEYWORD,admaster,REJECT"
+
+  - "DOMAIN-KEYWORD,adsage,REJECT"
+
+  - "DOMAIN-KEYWORD,adsmogo,REJECT"
+
+  - "DOMAIN-KEYWORD,adsrvmedia,REJECT"
+
+  - "DOMAIN-KEYWORD,adwords,REJECT"
+
+  - "DOMAIN-KEYWORD,adservice,REJECT"
+
+  - "DOMAIN-SUFFIX,appsflyer.com,REJECT"
+
+  - "DOMAIN-KEYWORD,domob,REJECT"
+
+  - "DOMAIN-SUFFIX,doubleclick.net,REJECT"
+
+  - "DOMAIN-KEYWORD,duomeng,REJECT"
+
+  - "DOMAIN-KEYWORD,dwtrack,REJECT"
+
+  - "DOMAIN-KEYWORD,guanggao,REJECT"
+
+  - "DOMAIN-KEYWORD,lianmeng,REJECT"
+
+  - "DOMAIN-SUFFIX,mmstat.com,REJECT"
+
+  - "DOMAIN-KEYWORD,mopub,REJECT"
+
+  - "DOMAIN-KEYWORD,omgmta,REJECT"
+
+  - "DOMAIN-KEYWORD,openx,REJECT"
+
+  - "DOMAIN-KEYWORD,partnerad,REJECT"
+
+  - "DOMAIN-KEYWORD,pingfore,REJECT"
+
+  - "DOMAIN-KEYWORD,supersonicads,REJECT"
+
+  - "DOMAIN-KEYWORD,uedas,REJECT"
+
+  - "DOMAIN-KEYWORD,umeng,REJECT"
+
+  - "DOMAIN-KEYWORD,usage,REJECT"
+
+  - "DOMAIN-SUFFIX,vungle.com,REJECT"
+
+  - "DOMAIN-KEYWORD,wlmonitor,REJECT"
+
+  - "DOMAIN-KEYWORD,zjtoolbar,REJECT"
+
+  - "DOMAIN-SUFFIX,9to5mac.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,abpchina.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,adblockplus.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,adobe.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,akamaized.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,alfredapp.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,amplitude.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ampproject.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,android.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,angularjs.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,aolcdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,apkpure.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,appledaily.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,appshopper.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,appspot.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,arcgis.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,archive.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,armorgames.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,aspnetcdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,att.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,awsstatic.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,azureedge.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,azurewebsites.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bing.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bintray.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bit.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bit.ly,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bitbucket.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bjango.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bkrtx.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blog.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blogcdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blogger.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blogsmithmedia.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blogspot.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,blogspot.hk,LocalCloud"
+
+  - "DOMAIN-SUFFIX,bloomberg.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,box.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,box.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cachefly.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,chromium.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cl.ly,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cloudflare.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cloudfront.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cloudmagic.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cmail19.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cnet.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,cocoapods.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,comodoca.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,crashlytics.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,culturedcode.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,d.pr,LocalCloud"
+
+  - "DOMAIN-SUFFIX,danilo.to,LocalCloud"
+
+  - "DOMAIN-SUFFIX,dayone.me,LocalCloud"
+
+  - "DOMAIN-SUFFIX,db.tt,LocalCloud"
+
+  - "DOMAIN-SUFFIX,deskconnect.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,disq.us,LocalCloud"
+
+  - "DOMAIN-SUFFIX,disqus.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,disquscdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,dnsimple.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,docker.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,dribbble.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,droplr.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,duckduckgo.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,dueapp.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,dytt8.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,edgecastcdn.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,edgekey.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,edgesuite.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,engadget.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,entrust.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,eurekavpt.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,evernote.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fabric.io,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fast.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fastly.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fc2.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,feedburner.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,feedly.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,feedsportal.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,fiftythree.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,firebaseio.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,flexibits.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,flickr.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,flipboard.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,g.co,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gabia.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,geni.us,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gfx.ms,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ggpht.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ghostnoteapp.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,git.io,LocalCloud"
+
+  - "DOMAIN-KEYWORD,github,LocalCloud"
+
+  - "DOMAIN-SUFFIX,globalsign.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gmodules.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,godaddy.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,golang.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gongm.in,LocalCloud"
+
+  - "DOMAIN-SUFFIX,goo.gl,LocalCloud"
+
+  - "DOMAIN-SUFFIX,goodreaders.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,goodreads.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gravatar.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gstatic.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,gvt0.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,hockeyapp.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,hotmail.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,icons8.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ifixit.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ift.tt,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ifttt.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,iherb.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,imageshack.us,LocalCloud"
+
+  - "DOMAIN-SUFFIX,img.ly,LocalCloud"
+
+  - "DOMAIN-SUFFIX,imgur.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,imore.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,instapaper.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ipn.li,LocalCloud"
+
+  - "DOMAIN-SUFFIX,is.gd,LocalCloud"
+
+  - "DOMAIN-SUFFIX,issuu.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,itgonglun.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,itun.es,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ixquick.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,j.mp,LocalCloud"
+
+  - "DOMAIN-SUFFIX,js.revsci.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,jshint.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,jtvnw.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,justgetflux.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,kat.cr,LocalCloud"
+
+  - "DOMAIN-SUFFIX,klip.me,LocalCloud"
+
+  - "DOMAIN-SUFFIX,libsyn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,linkedin.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,line-apps.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,linode.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,lithium.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,littlehj.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,live.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,live.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,livefilestore.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,llnwd.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,macid.co,LocalCloud"
+
+  - "DOMAIN-SUFFIX,macromedia.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,macrumors.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mashable.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mathjax.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,medium.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mega.co.nz,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mega.nz,LocalCloud"
+
+  - "DOMAIN-SUFFIX,megaupload.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,microsofttranslator.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mindnode.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,mobile01.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,modmyi.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,msedge.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,myfontastic.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,name.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,nextmedia.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,nsstatic.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,nssurge.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,nyt.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,nytimes.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,omnigroup.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,onedrive.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,onenote.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ooyala.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,openvpn.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,openwrt.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,orkut.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,osxdaily.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,outlook.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ow.ly,LocalCloud"
+
+  - "DOMAIN-SUFFIX,paddleapi.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,parallels.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,parse.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,pdfexpert.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,periscope.tv,LocalCloud"
+
+  - "DOMAIN-SUFFIX,pinboard.in,LocalCloud"
+
+  - "DOMAIN-SUFFIX,pinterest.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,pixelmator.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,pixiv.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,playpcesor.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,playstation.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,playstation.com.hk,LocalCloud"
+
+  - "DOMAIN-SUFFIX,playstation.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,playstationnetwork.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,pushwoosh.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,rime.im,LocalCloud"
+
+  - "DOMAIN-SUFFIX,servebom.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,sfx.ms,LocalCloud"
+
+  - "DOMAIN-SUFFIX,shadowsocks.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,sharethis.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,shazam.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,skype.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,smartdnsLocalCloud.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,smartmailcloud.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,sndcdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,sony.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,soundcloud.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,sourceforge.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,spotify.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,squarespace.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,sstatic.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,st.luluku.pw,LocalCloud"
+
+  - "DOMAIN-SUFFIX,stackoverflow.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,startpage.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,staticflickr.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,steamcommunity.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,symauth.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,symcb.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,symcd.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tapbots.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tapbots.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tdesktop.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,techcrunch.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,techsmith.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,thepiratebay.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,theverge.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,time.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,timeinc.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tiny.cc,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tinypic.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tmblr.co,LocalCloud"
+
+  - "DOMAIN-SUFFIX,todoist.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,trello.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,trustasiassl.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tumblr.co,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tumblr.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tweetdeck.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,tweetmarker.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,twitch.tv,LocalCloud"
+
+  - "DOMAIN-SUFFIX,txmblr.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,typekit.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ubertags.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ublock.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ubnt.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ulyssesapp.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,urchin.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,usertrust.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,v.gd,LocalCloud"
+
+  - "DOMAIN-SUFFIX,v2ex.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vimeo.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vimeocdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vine.co,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vivaldi.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vox-cdn.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vsco.co,LocalCloud"
+
+  - "DOMAIN-SUFFIX,vultr.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,w.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,w3schools.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,webtype.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wikiwand.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wikileaks.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wikimedia.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wikipedia.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wikipedia.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,windows.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,windows.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wire.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wordpress.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,workflowy.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wp.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wsj.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,wsj.net,LocalCloud"
+
+  - "DOMAIN-SUFFIX,xda-developers.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,xeeno.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,xiti.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,yahoo.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,yimg.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ying.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,yoyo.org,LocalCloud"
+
+  - "DOMAIN-SUFFIX,ytimg.com,LocalCloud"
+
+  - "DOMAIN-SUFFIX,telegra.ph,LocalCloud"
+
+  - "DOMAIN-SUFFIX,telegram.org,LocalCloud"
+
+  - "IP-CIDR,91.108.4.0/22,LocalCloud,no-resolve"
+
+  - "IP-CIDR,91.108.8.0/21,LocalCloud,no-resolve"
+
+  - "IP-CIDR,91.108.16.0/22,LocalCloud,no-resolve"
+
+  - "IP-CIDR,91.108.56.0/22,LocalCloud,no-resolve"
+
+  - "IP-CIDR,149.154.160.0/20,LocalCloud,no-resolve"
+
+  - "IP-CIDR6,2001:67c:4e8::/48,LocalCloud,no-resolve"
+
+  - "IP-CIDR6,2001:b28:f23d::/48,LocalCloud,no-resolve"
+
+  - "IP-CIDR6,2001:b28:f23f::/48,LocalCloud,no-resolve"
+
+  - "IP-CIDR,120.232.181.162/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,120.241.147.226/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,120.253.253.226/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,120.253.255.162/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,120.253.255.34/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,120.253.255.98/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,180.163.150.162/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,180.163.150.34/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,180.163.151.162/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,180.163.151.34/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,203.208.39.0/24,LocalCloud,no-resolve"
+
+  - "IP-CIDR,203.208.40.0/24,LocalCloud,no-resolve"
+
+  - "IP-CIDR,203.208.41.0/24,LocalCloud,no-resolve"
+
+  - "IP-CIDR,203.208.43.0/24,LocalCloud,no-resolve"
+
+  - "IP-CIDR,203.208.50.0/24,LocalCloud,no-resolve"
+
+  - "IP-CIDR,220.181.174.162/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,220.181.174.226/32,LocalCloud,no-resolve"
+
+  - "IP-CIDR,220.181.174.34/32,LocalCloud,no-resolve"
+
+  - "DOMAIN,injections.adguard.org,DIRECT"
+
+  - "DOMAIN,local.adguard.org,DIRECT"
+
+  - "DOMAIN-SUFFIX,local,DIRECT"
+
+  - "IP-CIDR,127.0.0.0/8,DIRECT"
+
+  - "IP-CIDR,172.16.0.0/12,DIRECT"
+
+  - "IP-CIDR,192.168.0.0/16,DIRECT"
+
+  - "IP-CIDR,10.0.0.0/8,DIRECT"
+
+  - "IP-CIDR,17.0.0.0/8,DIRECT"
+
+  - "IP-CIDR,100.64.0.0/10,DIRECT"
+
+  - "IP-CIDR,224.0.0.0/4,DIRECT"
+
+  - "IP-CIDR6,fe80::/10,DIRECT"
+
+  - "DOMAIN-SUFFIX,cn,DIRECT"
+
+  - "DOMAIN-KEYWORD,-cn,DIRECT"
+
+  - "GEOIP,CN,DIRECT"
+
+  - "MATCH,LocalCloud"

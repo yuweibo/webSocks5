@@ -9,6 +9,9 @@ import (
 	"golang.org/x/net/websocket"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 	"webSocks5/pkg/protocol"
@@ -84,11 +87,24 @@ func hello(c echo.Context) error {
 	return nil
 }
 
+func clash(c echo.Context) error {
+	_, filename, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(filename)
+	filePath := filepath.Join(dir, "webSocks5.yaml")
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		c.Response().Write([]byte(err.Error()))
+	}
+	c.Response().Write(b)
+	return nil
+}
+
 func Listen(port string) {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.GET("/ws", hello)
+	e.GET("/clash.yaml", clash)
 	e.GET("/*", func(c echo.Context) error {
 		return c.String(200, "Hello, World!")
 	})
