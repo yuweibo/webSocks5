@@ -12,7 +12,7 @@
       - 填写参数
         - 函数名称: 随意
         - 运行时 debian9,通过文件夹上传二进制包(webSocks5)
-        - 启动命令 ./webSocks5 -m=s
+        - 启动命令 ./.webSocks5 -m=s
         - 监听端口 1323
       - 高级配置
         - cpu 0.05
@@ -29,3 +29,7 @@
 - 访问
   - firefox
     - 配置![image](img/firefox-config.png)
+  - clash
+    - 导入订阅
+      - 触发器获取公网访问地址/clash.yaml
+    - 打开系统代理
